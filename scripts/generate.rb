@@ -23,7 +23,7 @@ operations = spec.fetch("paths").flat_map do |path, item|
 end.sort
 
 lines = operations.map do |id, method, path|
-  "    #{id.inspect} => [#{method.inspect}, #{path.inspect}],"
+  "    #{id.inspect} => [#{method.inspect}, #{path.inspect}]"
 end
 
 File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
@@ -33,7 +33,7 @@ File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
   module Nohead
     # Every operation an API key can call: [method, path].
     OPERATIONS = {
-  #{lines.join("\n")}
+  #{lines.join(",\n")}
     }.freeze
   end
 RUBY
