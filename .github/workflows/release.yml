@@ -1,0 +1,57 @@
+# Publishes a release when its tag (v1.2.3) is pushed. Tags are pushed by the
+# Nohead API repository's "SDK release" workflow, after this commit's smoke
+# test passed against the API. RubyGems trusted publishing (OIDC, no API key)
+# adds a Sigstore attestation; CHANGELOG.md's section for the version is the
+# release's notes.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # the GitHub release
+      id-token: write # RubyGems trusted publishing and attestations
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1
+        with:
+          ruby-version: "4.0"
+          # No dependency cache for a release: a poisoned cache could reach the package.
+          bundler-cache: false
+      - name: Check the version and its notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(ruby -r ./lib/nohead/version -e 'print Nohead::VERSION')
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match lib/nohead/version.rb $version"; exit 1
+          fi
+          awk -v v="$version" '$0 == "## " v {found=1; next} found && /^## / {exit} found' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for $version"; exit 1
+          fi
+      - run: bundle install
+      - run: bundle exec rake test
+      # Builds the gem, pushes it with trusted publishing and attests it.
+      - uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
+        with:
+          await-release: false
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md

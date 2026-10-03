@@ -1,0 +1,21 @@
+# Changelog
+
+Changes to the `nohead` gem that you can notice. Versions follow
+[Semantic Versioning](https://semver.org): additive API changes are minor
+releases; a change that could break your code is a major one. Each release's
+section is its GitHub release's notes.
+
+## 0.1.0
+
+The first release.
+
+- `Nohead::Client`, with methods for every operation an API key can call:
+  records (with revisions, scheduling, bulk changes and search),
+  collections, fields and migrations, assets, webhooks and their deliveries,
+  the audit log, feature flags.
+- Results you read with methods or `[]`, pages that are Enumerable across
+  every page, timestamps as Times.
+- Typed errors per API error type, retries with idempotency keys,
+  `if_match` and change notes.
+- `assets.upload` in one call (paths or IO), and webhook verification
+  (`Nohead::Webhooks.unwrap`). No runtime dependencies.

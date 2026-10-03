@@ -1,0 +1,38 @@
+AllCops:
+  TargetRubyVersion: 3.3
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - vendor/**/*
+    - tmp/**/*
+
+Layout/LineLength:
+  Max: 120
+  Exclude:
+    - test/calls.rb # one call per line, as the docs show them
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/Documentation:
+  Exclude:
+    - test/**/*
+    - lib/nohead/errors.rb # the classes' names say it
+
+# A client and its resources have one method per API operation.
+Metrics/ClassLength:
+  Enabled: false
+Metrics/MethodLength:
+  Max: 30
+Metrics/AbcSize:
+  Max: 40
+Metrics/ParameterLists:
+  Enabled: false
+Metrics/CyclomaticComplexity:
+  Max: 12
+Metrics/PerceivedComplexity:
+  Max: 12
+Metrics/BlockLength:
+  Exclude:
+    - test/**/*
+    - "*.gemspec"
