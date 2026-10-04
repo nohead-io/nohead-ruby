@@ -38,8 +38,12 @@ module Nohead
         @client.request("assets_complete", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end
 
-      def list(deleted: nil, limit: nil, cursor: nil)
-        @client.paginate("assets_list", query: { deleted: deleted, limit: limit, cursor: cursor })
+      # `content_type` lists only assets of those MIME types or `type/*`
+      # wildcards (["image/*", "application/pdf"]), for example the ones an
+      # asset field accepts (its `accepted_types`).
+      def list(content_type: nil, deleted: nil, limit: nil, cursor: nil)
+        @client.paginate("assets_list", query: { content_type: content_type, deleted: deleted,
+                                                 limit: limit, cursor: cursor })
       end
 
       def get(asset)
