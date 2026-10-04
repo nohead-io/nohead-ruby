@@ -20,6 +20,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # RubyGems' trusted publisher only accepts this environment, which only v* tags can use.
+    environment: release
     permissions:
       contents: write # the GitHub release
       id-token: write # RubyGems trusted publishing and attestations
