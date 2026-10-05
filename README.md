@@ -12,7 +12,7 @@ nohead.records.list("posts", filter: { status: "published" }).each do |post|
 end
 ```
 
-> **Status:** 0.x, not yet published to RubyGems. Until it is, use it from GitHub: `gem "nohead", github: "nohead-io/nohead-ruby"`.
+> **Status:** 0.x until the Nohead API launches.
 
 ## Contents
 
