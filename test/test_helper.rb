@@ -6,8 +6,11 @@ require "minitest/autorun"
 require "json"
 require "stringio"
 
-# Retries wait no time in tests.
-Nohead::Client.prepend(Module.new { def pause(_seconds) = nil })
+# Retries wait no time in tests; `pauses` lists the waits they asked for.
+Nohead::Client.prepend(Module.new do
+  def pauses = @pauses ||= []
+  def pause(seconds) = pauses << seconds
+end)
 
 require_relative "fake_transport"
 

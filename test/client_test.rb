@@ -29,11 +29,20 @@ class ClientTest < Minitest::Test
     end
   end
 
+  def test_defaults_to_production
+    with_env("NOHEAD_API_URL" => "") do
+      transport = FakeTransport.new([json(200, record("rec_1"))])
+      Nohead::Client.new(api_key: "sk_live_x", transport: transport).records.get("rec_1")
+      assert_equal "https://api.nohead.io/v1/records/rec_1", transport.requests.first.url
+    end
+  end
+
   def test_identifies_itself
     nohead, transport = client([json(200, record("rec_1"))], headers: { "X-Extra" => "yes" })
     nohead.records.get("rec_1")
     headers = transport.requests.first.headers
     assert_equal "sdk-ruby/#{Nohead::VERSION}", headers["Nohead-Client"]
+    assert_equal "nohead-ruby/#{Nohead::VERSION} ruby/#{RUBY_VERSION}", headers["User-Agent"]
     assert_equal "application/json", headers["Accept"]
     assert_equal "yes", headers["X-Extra"]
   end

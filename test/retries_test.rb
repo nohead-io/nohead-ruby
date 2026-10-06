@@ -16,8 +16,9 @@ class RetriesTest < Minitest::Test
   end
 
   def test_waits_out_a_short_retry_after
-    nohead, transport = client([api_error(429, "rate_limited", NOW), json(200, record("r"))])
+    nohead, transport = client([api_error(429, "rate_limited", { "retry-after" => "3" }), json(200, record("r"))])
     nohead.records.get("r")
+    assert_equal [3], nohead.pauses
     assert_equal 2, transport.requests.size
   end
 
