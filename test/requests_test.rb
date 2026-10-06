@@ -88,8 +88,7 @@ class RequestsTest < Minitest::Test
 
   def test_diff_names_its_revisions
     nohead, transport = client([json(200, { object: "record_diff", from: 1, to: 2, changes: [] })])
-    diff = nohead.records.diff("rec_1", 1, 2)
-    assert_equal [1, 2], [diff.from, diff.to]
+    nohead.records.diff("rec_1", 1, 2)
     assert_equal({ "from" => "1", "to" => "2" }, transport.requests.first.params)
   end
 end

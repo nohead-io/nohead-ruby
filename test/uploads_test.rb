@@ -46,6 +46,13 @@ class UploadsTest < Minitest::Test
                    "byte_size" => 10 }, transport.requests.first.json)
   end
 
+  def test_needs_byte_size_for_a_stream
+    nohead, = client([created])
+    IO.pipe do |reader, _writer|
+      assert_raises(Nohead::UploadError) { nohead.assets.upload(reader) }
+    end
+  end
+
   def test_storage_refusing_the_bytes
     nohead, = client([created, Nohead::Response.new(403, {}, "denied")])
     error = assert_raises(Nohead::UploadError) { nohead.assets.upload(StringIO.new("x")) }
