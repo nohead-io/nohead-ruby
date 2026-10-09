@@ -99,7 +99,7 @@ page = page.next_page while page.next_page?
 nohead.records.list("posts", cursor: saved_cursor)
 ```
 
-Filters are equality filters (for fields with several values: "contains"), and accept strings, numbers, booleans and Times:
+Filters are equality filters (for fields with several values: "contains"), and accept strings, numbers, booleans, Times (for date fields with a time) and Dates (for plain date fields, sent as `YYYY-MM-DD`):
 
 ```ruby
 nohead.records.list("posts", filter: { status: "published", featured: true, author: "rec_01J9..." },
