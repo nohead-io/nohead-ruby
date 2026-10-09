@@ -28,6 +28,22 @@ class RequestsTest < Minitest::Test
     refute params.key?("cursor")
   end
 
+  def test_serializes_filter_operators_escaping_commas_in_lists
+    nohead, transport = client([page([], nil)])
+    nohead.records.list("products", filter: { status: { ne: "draft" }, price: { gte: 10, lt: 50 },
+                                              category: { in: ["shoes", "hats, caps", "a\\b"] },
+                                              cover: { exists: true }, released: { gte: Date.new(2026, 10, 9) } },
+                                    sort: "-price")
+    params = transport.requests.first.params
+    assert_equal "draft", params["filter[status][ne]"]
+    assert_equal "10", params["filter[price][gte]"]
+    assert_equal "50", params["filter[price][lt]"]
+    assert_equal "shoes,hats\\, caps,a\\\\b", params["filter[category][in]"]
+    assert_equal "true", params["filter[cover][exists]"]
+    assert_equal "2026-10-09", params["filter[released][gte]"]
+    assert_equal "-price", params["sort"]
+  end
+
   def test_sends_bodies_as_json
     nohead, transport = client([json(201, record("rec_1"))])
     assert_equal "rec_1", nohead.records.create("posts", data: { title: "Hi" }).id

@@ -99,11 +99,14 @@ page = page.next_page while page.next_page?
 nohead.records.list("posts", cursor: saved_cursor)
 ```
 
-Filters are equality filters (for fields with several values: "contains"), and accept strings, numbers, booleans, Times (for date fields with a time) and Dates (for plain date fields, sent as `YYYY-MM-DD`):
+Filters take a value to equal, or operators: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in` (an array) and `exists`. They combine with AND. On fields with several values, equal means "contains". Values are strings, numbers, booleans, Times (for date fields with a time) and Dates (for plain date fields, sent as `YYYY-MM-DD`); dates take `"today"` too. Lists sort by a field as well, with records that have no value last:
 
 ```ruby
 nohead.records.list("posts", filter: { status: "published", featured: true, author: "rec_01J9..." },
                              sort: "-published_at", expand: %w[author tags])
+
+nohead.records.list("products", filter: { price: { lt: 50 }, category: { in: %w[shoes bags] }, cover: { exists: true } },
+                                sort: "price")
 ```
 
 ## Errors
