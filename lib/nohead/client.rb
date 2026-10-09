@@ -158,8 +158,9 @@ module Nohead
     end
 
     # Query parameters as the API reads them: hashes become key[sub]=...
-    # (filter[status]=published), arrays are comma-separated (expand=author,tags),
-    # times are ISO 8601. nil values are left out.
+    # (filter[price][lt]=50), arrays are comma-separated (expand=author,tags)
+    # with \, for a comma inside a value and \\ for a backslash, times are
+    # ISO 8601. nil values are left out.
     def query_string(params)
       pairs = []
       add = lambda do |key, value|
@@ -167,7 +168,7 @@ module Nohead
         when nil then nil
         when Hash then value.each { |name, inner| add.call("#{key}[#{name}]", inner) }
         when Array
-          items = value.compact.map { |item| scalar(item) }
+          items = value.compact.map { |item| scalar(item).gsub(/[\\,]/) { |char| "\\#{char}" } }
           pairs << [key, items.join(",")] unless items.empty?
         else pairs << [key, scalar(value)]
         end
