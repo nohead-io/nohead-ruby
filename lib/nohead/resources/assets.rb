@@ -59,6 +59,21 @@ module Nohead
         @client.request("assets_restore", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end
 
+      # Deletes a deleted asset for good, now instead of 30 days after the
+      # delete, and returns it as it was. It can't be restored, and its image
+      # URLs stop working. Raises ConflictError if the asset isn't deleted.
+      def purge(asset, idempotency_key: nil)
+        @client.request("assets_purge", path: { asset_id: asset }, idempotency_key: idempotency_key)
+      end
+
+      # Where the asset is used: how many undeleted records use it (`records`),
+      # how many of those are published (`published`), and the 10 most
+      # recently updated with the fields they use it in (`uses`). Needs
+      # `records:read` too.
+      def usage(asset)
+        @client.request("assets_usage", path: { asset_id: asset })
+      end
+
       # A signed, cacheable URL of an image rendition (`url`).
       def image_url(asset, width: nil, height: nil, fit: nil, format: nil, quality: nil)
         @client.request("assets_image_url", path: { asset_id: asset }, query: {

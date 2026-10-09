@@ -257,7 +257,7 @@ The API's resources come back as `Nohead::NoheadObject`s.
 | `collections.search_index` | `get`, `rebuild` |
 | `fields` | `list`, `create`, `update`, `delete`, `restore`, `reorder`, `remove_alias`, `migrate` |
 | `migrations` | `list`, `get`, `cancel` |
-| `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `delete`, `restore`, `image_url`, `download_url` |
+| `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `delete`, `restore`, `purge`, `usage`, `image_url`, `download_url` |
 | `webhooks` | `list`, `get`, `create`, `update`, `delete`, `rotate_secret`, `test`, `unwrap` |
 | `webhooks.deliveries` | `list`, `get`, `retry` |
 | `audit_events` | `list` |
