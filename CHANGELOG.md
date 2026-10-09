@@ -7,6 +7,9 @@ section is its GitHub release's notes.
 
 ## Unreleased
 
+- Text fields take a `format` (`email`, `url`, `slug`) and text and integer
+  fields `unique`; a taken value's error detail has the `record_id` that has
+  it (`code: "taken"`).
 - Filters take operators: `{ price: { lt: 50 } }`, with `eq`, `ne`, `gt`,
   `gte`, `lt`, `lte`, `in` (an array) and `exists`, and record lists sort by
   a field's value. Commas and backslashes in array values are escaped, so a
