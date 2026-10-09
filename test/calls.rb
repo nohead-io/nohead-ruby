@@ -53,6 +53,8 @@ module Calls
     ->(nohead) { nohead.assets.get("ast_01J9ZQ3F8X") },
     ->(nohead) { nohead.assets.delete("ast_01J9ZQ3F8X") },
     ->(nohead) { nohead.assets.restore("ast_01J9ZQ3F8X") },
+    ->(nohead) { nohead.assets.purge("ast_01J9ZQ3F8X") },
+    ->(nohead) { nohead.assets.usage("ast_01J9ZQ3F8X") },
     ->(nohead) { nohead.assets.image_url("ast_01J9ZQ3F8X", width: 100, format: "webp") },
     ->(nohead) { nohead.assets.download_url("ast_01J9ZQ3F8X") },
     ->(nohead) { nohead.webhooks.list },
