@@ -4,6 +4,8 @@
 # them. The contract test runs every call against the contract, and
 # scripts/samples.rb turns each into the API reference's code sample for the
 # operation it calls (samples.json).
+require_relative "spec"
+
 module Calls
   EVERY_CALL = [
     ->(nohead) { nohead.records.list("posts", filter: { status: "published" }, sort: "-created_at", expand: ["author"], limit: 5) },
@@ -73,24 +75,23 @@ module Calls
     ->(nohead) { nohead.health.check }
   ].freeze
 
-  LISTS = %r{/(records|collections|fields|assets|webhooks|deliveries|revisions|schema-changes|migrations|audit-events|search)\z}
-  UPLOAD = {
-    object: "asset_upload", asset: { id: "ast_01J9ZQ3F8X", filename: "hello.txt" },
-    upload: { method: "PUT", url: "https://storage.test/u", headers: {}, expires_at: "2026-10-02T13:00:00.000Z" }
-  }.freeze
-  RECORD = { id: "rec_01J9ZQ3F8X", object: "record", revision: 1, data: {} }.freeze
-
-  # A plausible answer to any of the calls above.
+  # The reply to any of the calls above: the contract's example of the
+  # operation's success response (test/spec.rb), with an upload URL on storage.
   def self.reply(request)
-    headers = { "content-type" => "application/json" }
     return Nohead::Response.new(200, {}, "") if request.uri.host == "storage.test"
-    return Nohead::Response.new(201, headers, JSON.generate(UPLOAD)) if request.path.end_with?("/assets/uploads")
 
-    body = if request.method == "GET" && request.path.match?(LISTS)
-             { data: [RECORD], meta: { next_cursor: nil, has_more: false } }
-           else
-             RECORD
-           end
-    Nohead::Response.new(200, headers, JSON.generate(body))
+    route = Spec.route_of(request.method, request.path)
+    Nohead::Response.new(route.status, { "content-type" => "application/json" },
+                         JSON.generate(example_reply(route, request)))
+  end
+
+  # The body of `reply` for a request of an operation.
+  def self.example_reply(route, request)
+    schema = route.response.schema
+    # A dry run's reply is the preview, the last of oneOf (records.revisions.revert).
+    schema = schema["oneOf"].last if request.params["dry_run"] == "true" && schema["oneOf"]
+    body = JSON.parse(JSON.generate(Spec.example(schema))) # a copy: examples are the contract's
+    body["upload"]["url"] = "https://storage.test/u" if route.id == "assets_upload"
+    body
   end
 end
