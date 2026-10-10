@@ -4,10 +4,10 @@ require "json"
 require "uri"
 
 # A transport that answers from `replies` in order (the last one repeats) and
-# records every request. A reply is a Nohead::Response, an exception to raise,
-# or a callable taking the request.
+# records every request, with the timeout it was sent with. A reply is a
+# Nohead::Response, an exception to raise, or a callable taking the request.
 class FakeTransport
-  Request = Struct.new(:method, :url, :headers, :body) do # rubocop:disable Lint/StructNewOverride
+  Request = Struct.new(:method, :url, :headers, :body, :timeout) do # rubocop:disable Lint/StructNewOverride
     def uri = URI(url)
     def path = uri.path
     def params = URI.decode_www_form(uri.query.to_s).to_h
@@ -21,9 +21,9 @@ class FakeTransport
     @requests = []
   end
 
-  def call(method, url, headers, body, _timeout)
+  def call(method, url, headers, body, timeout)
     body = body.read if body.respond_to?(:read)
-    request = Request.new(method, url, headers, body)
+    request = Request.new(method, url, headers, body, timeout)
     @requests << request
     reply = @replies[[@requests.size - 1, @replies.size - 1].min]
     raise reply if reply.is_a?(Exception)

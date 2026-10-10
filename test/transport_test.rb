@@ -8,10 +8,11 @@ class TransportTest < Minitest::Test
   end
 
   # While `reply` is set, Net::HTTP connections answer with it (called with
-  # the request) instead of reaching the network, and keep what was sent.
+  # the request) instead of reaching the network, and keep what was sent and
+  # the last connection.
   module Offline
     class << self
-      attr_accessor :reply, :sent
+      attr_accessor :reply, :sent, :connection
     end
 
     def start(&) = Offline.reply ? yield(self) : super
@@ -20,6 +21,7 @@ class TransportTest < Minitest::Test
       return super unless Offline.reply
 
       Offline.sent << request
+      Offline.connection = self
       Offline.reply.call(request)
     end
   end
@@ -47,6 +49,14 @@ class TransportTest < Minitest::Test
       assert_equal "/v1/records?x=1", sent.first.path
       assert_equal "application/json", sent.first["Content-Type"]
       assert_equal '{"data":{}}', sent.first.body
+    end
+  end
+
+  def test_sets_every_timeout
+    offline(->(_) { FakeResponse.new("200", "") }) do
+      send_request
+      http = Offline.connection
+      assert_equal [5, 5, 5], [http.open_timeout, http.read_timeout, http.write_timeout]
     end
   end
 

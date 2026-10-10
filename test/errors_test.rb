@@ -11,9 +11,12 @@ class ErrorsTest < Minitest::Test
   end
 
   {
+    400 => ["invalid_request", Nohead::InvalidRequestError],
     401 => ["authentication_error", Nohead::AuthenticationError],
     402 => ["plan_limit_exceeded", Nohead::PlanLimitExceededError],
+    403 => ["authorization_error", Nohead::AuthorizationError],
     404 => ["not_found", Nohead::NotFoundError],
+    409 => ["conflict", Nohead::ConflictError],
     412 => ["precondition_failed", Nohead::PreconditionFailedError],
     422 => ["validation_error", Nohead::ValidationError],
     429 => ["rate_limited", Nohead::RateLimitError],
@@ -21,8 +24,9 @@ class ErrorsTest < Minitest::Test
     503 => ["service_unavailable", Nohead::ServiceUnavailableError]
   }.each do |status, (type, klass)|
     define_method("test_maps_#{type}") do
-      error = failure(api_error(status, type))
+      error = failure(api_error(status, type, { "x-a" => "b" }))
       assert_instance_of klass, error
+      assert_equal "b", error.headers["x-a"]
       assert_equal [status, type, "req_1"], [error.status, error.type, error.request_id]
       assert_equal "#{status} #{type}: #{type} message (request req_1)", error.to_s
     end
