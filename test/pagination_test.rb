@@ -5,14 +5,19 @@ require_relative "test_helper"
 class PaginationTest < Minitest::Test
   include Helpers
 
-  def test_returns_the_first_page
-    nohead, transport = client([page([record("rec_1")], "c2")])
+  def test_returns_the_first_page_then_pages_by_hand
+    nohead, transport = client([page([record("rec_1")], "c2"), page([record("rec_2")], nil)])
     first = nohead.records.list("posts", limit: 1)
     assert_instance_of Nohead::Page, first
     assert_equal ["rec_1"], first.data.map(&:id)
     assert_equal "c2", first.meta.next_cursor
     assert_predicate first, :next_page?
     refute transport.requests.first.params.key?("cursor")
+    second = first.next_page
+    assert_equal "rec_2", second.data.first.id
+    assert_equal "c2", transport.requests[1].params["cursor"]
+    refute_predicate second, :next_page?
+    assert_raises(Nohead::Error) { second.next_page }
   end
 
   def test_each_walks_every_page_keeping_the_parameters
@@ -27,14 +32,6 @@ class PaginationTest < Minitest::Test
     nohead, transport = client([page([record("rec_1"), record("rec_2")], "c2")])
     assert_equal ["rec_1"], nohead.records.list("posts").first(1).map(&:id)
     assert_equal 1, transport.requests.size
-  end
-
-  def test_pages_by_hand
-    nohead, = client([page([record("rec_1")], "c2"), page([record("rec_2")], nil)])
-    second = nohead.records.list("posts").next_page
-    assert_equal "rec_2", second.data.first.id
-    refute_predicate second, :next_page?
-    assert_raises(Nohead::Error) { second.next_page }
   end
 
   def test_resumes_from_a_cursor
