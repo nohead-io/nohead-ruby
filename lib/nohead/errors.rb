@@ -20,7 +20,7 @@ module Nohead
     attr_reader :body
 
     def initialize(status, body, headers)
-      error = body.is_a?(Hash) && body["error"].is_a?(Hash) ? body["error"] : {}
+      error = Nohead.error_envelope(body)
       @status = status
       @type = error["type"]
       @request_id = error["request_id"] || headers["x-request-id"]
@@ -99,13 +99,23 @@ module Nohead
 
   # The error for a response, by its `type`, or by status when it has none.
   def self.api_error(status, body, headers)
-    type = body.is_a?(Hash) && body["error"].is_a?(Hash) ? body["error"]["type"] : nil
-    klass = ERROR_CLASSES[type] ||
+    klass = ERROR_CLASSES[error_envelope(body)["type"]] ||
             if status == 503 then ServiceUnavailableError
             elsif status >= 500 then InternalServerError
             else APIError
             end
     klass.new(status, body, headers)
+  end
+
+  # The error envelope's fields that have the right type: a proxy or gateway
+  # in front of the API may answer with any JSON.
+  def self.error_envelope(body)
+    error = body["error"] if body.is_a?(Hash)
+    return {} unless error.is_a?(Hash)
+
+    fields = error.slice("type", "message", "request_id").select { |_, value| value.is_a?(String) }
+    fields["details"] = error["details"] if error["details"].is_a?(Array)
+    fields
   end
 
   def self.retry_after_seconds(headers)

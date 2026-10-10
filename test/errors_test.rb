@@ -58,6 +58,17 @@ class ErrorsTest < Minitest::Test
     assert_equal "req_9", error.request_id
   end
 
+  def test_fields_of_the_wrong_type
+    # A gateway's JSON that looks like an envelope but is not one.
+    body = { "error" => { "type" => ["x"], "message" => { "text" => "x" }, "request_id" => 7,
+                          "details" => { "code" => "x" } } }
+    error = failure(Nohead::Response.new(502, { "content-type" => "application/json", "x-request-id" => "req_9" },
+                                         JSON.generate(body)))
+    assert_instance_of Nohead::InternalServerError, error
+    assert_equal [nil, "req_9", []], [error.type, error.request_id, error.details]
+    assert_equal "502 error: Request failed with status 502 (request req_9)", error.to_s
+  end
+
   def test_unknown_types_stay_api_errors
     assert_instance_of Nohead::APIError, failure(api_error(418, "teapot_error"))
   end
