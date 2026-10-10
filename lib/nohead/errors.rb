@@ -114,7 +114,8 @@ module Nohead
     return {} unless error.is_a?(Hash)
 
     fields = error.slice("type", "message", "request_id").select { |_, value| value.is_a?(String) }
-    fields["details"] = error["details"] if error["details"].is_a?(Array)
+    # Only hashes: current_revision reads each detail's fields.
+    fields["details"] = error["details"].grep(Hash) if error["details"].is_a?(Array)
     fields
   end
 

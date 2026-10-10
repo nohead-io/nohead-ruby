@@ -28,8 +28,9 @@ section is its GitHub release's notes.
   days after the delete, and frees its storage.
 - An error reads only the fields of the API's error envelope that have the
   right type, so JSON from a proxy or gateway that merely looks like one no
-  longer gives it a non-string `message`, `type` or `request_id`, or turns a
-  `details` object into key-value pairs.
+  longer gives it a non-string `message`, `type` or `request_id`, turns a
+  `details` object into key-value pairs, or makes `current_revision` raise on
+  a detail that isn't an object.
 
 ## 0.2.0
 

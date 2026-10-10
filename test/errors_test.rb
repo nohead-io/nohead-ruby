@@ -69,6 +69,13 @@ class ErrorsTest < Minitest::Test
     assert_equal "502 error: Request failed with status 502 (request req_9)", error.to_s
   end
 
+  def test_details_that_are_not_objects
+    detail = { "code" => "revision_mismatch", "message" => "x", "current_revision" => 7 }
+    error = failure(api_error(412, "precondition_failed", {}, details: [1, nil, "x", detail]))
+    assert_equal 1, error.details.size
+    assert_equal 7, error.current_revision
+  end
+
   def test_unknown_types_stay_api_errors
     assert_instance_of Nohead::APIError, failure(api_error(418, "teapot_error"))
   end
