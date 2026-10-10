@@ -12,9 +12,26 @@ Nohead::Client.prepend(Module.new do
   def pause(seconds) = pauses << seconds
 end)
 
+# While `Clock.now` is set, Time.now is that time: a frozen clock.
+module Clock
+  class << self
+    attr_accessor :now
+  end
+
+  def now(...) = Clock.now || super
+end
+Time.singleton_class.prepend(Clock)
+
 require_relative "fake_transport"
 
 module Helpers
+  def at_time(time)
+    Clock.now = time
+    yield
+  ensure
+    Clock.now = nil
+  end
+
   def client(replies, **)
     transport = FakeTransport.new(replies)
     nohead = Nohead::Client.new(api_key: "sk_live_test", base_url: "https://api.test",
