@@ -24,11 +24,12 @@ module Nohead
           raise UploadError.new("Storage refused the upload of #{source.filename} (#{response.status})",
                                 response.status)
         end
-        complete(created.asset.id)
+        complete(created.id)
       end
 
-      # The first step of an upload: a `pending` asset and a presigned URL to
-      # PUT the bytes to (for example from a browser). Then `complete` it.
+      # The first step of an upload: a `pending` asset with its `upload`, a
+      # presigned URL to PUT the bytes to (for example from a browser). Then
+      # `complete` it.
       def create_upload(idempotency_key: nil, **params)
         @client.request("assets_upload", body: params, idempotency_key: idempotency_key)
       end
@@ -42,7 +43,7 @@ module Nohead
       # wildcards (["image/*", "application/pdf"]), for example the ones an
       # asset field accepts (its `accepted_types`).
       def list(content_type: nil, deleted: nil, limit: nil, cursor: nil)
-        @client.paginate("assets_list", query: { content_type: content_type, deleted: deleted,
+        @client.paginate("assets_list", query: { filter: { content_type: content_type, deleted: deleted },
                                                  limit: limit, cursor: cursor })
       end
 
@@ -50,7 +51,7 @@ module Nohead
         @client.request("assets_get", path: { asset_id: asset })
       end
 
-      # Soft-deletes the asset; the file is purged after 30 days.
+      # Soft-deletes the asset; the file is purged at its `purge_after` (30 days).
       def delete(asset, idempotency_key: nil)
         @client.request("assets_delete", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end
@@ -59,8 +60,8 @@ module Nohead
         @client.request("assets_restore", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end
 
-      # Deletes a deleted asset for good, now instead of 30 days after the
-      # delete, and returns it as it was. It can't be restored, and its image
+      # Deletes a deleted asset for good, now instead of at its `purge_after`,
+      # and returns it as it was. It can't be restored, and its image
       # URLs stop working. Raises ConflictError if the asset isn't deleted.
       def purge(asset, idempotency_key: nil)
         @client.request("assets_purge", path: { asset_id: asset }, idempotency_key: idempotency_key)

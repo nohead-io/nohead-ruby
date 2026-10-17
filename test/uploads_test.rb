@@ -12,10 +12,9 @@ class UploadsTest < Minitest::Test
   end
 
   def created
-    json(201, { object: "asset_upload", asset: asset("pending"),
-                upload: { method: "PUT", url: "https://storage.test/uploads/prj_1/ast_1?signature=x",
-                          headers: { "Content-Type" => "image/png" },
-                          expires_at: "2026-10-02T13:00:00.000Z" } })
+    json(201, asset("pending").merge(upload: { method: "PUT", url: "https://storage.test/uploads/prj_1/ast_1?signature=x",
+                                               headers: { "Content-Type" => "image/png" },
+                                               expires_at: "2026-10-02T13:00:00.000Z" }))
   end
 
   def stored = Nohead::Response.new(200, {}, "")
@@ -27,8 +26,8 @@ class UploadsTest < Minitest::Test
       File.binwrite(path, "\x01\x02\x03")
       nohead, transport = client([created, stored, ready], timeout: 9)
       assert_equal "ready", nohead.assets.upload(path).status
-      assert_equal(["POST api.test/v1/projects/prj_1/assets/uploads", "PUT storage.test/uploads/prj_1/ast_1",
-                    "POST api.test/v1/assets/ast_1/complete"],
+      assert_equal(["POST api.test/v1/projects/prj_1/assets", "PUT storage.test/uploads/prj_1/ast_1",
+                    "POST api.test/v1/assets/ast_1/completion"],
                    transport.requests.map { |request| "#{request.method} #{request.uri.host}#{request.path}" })
       assert_equal({ "filename" => "a.png", "content_type" => "image/png", "byte_size" => 3 },
                    transport.requests.first.json)

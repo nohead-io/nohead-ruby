@@ -7,7 +7,7 @@ require "nohead"
 
 nohead = Nohead::Client.new # reads NOHEAD_API_KEY
 
-nohead.records.list("posts", filter: { status: "published" }).each do |post|
+nohead.records.list("posts", filter: { published_at: { exists: true } }).each do |post|
   puts post.data["title"]
 end
 ```
@@ -64,10 +64,11 @@ API keys belong to a project, so methods like `collections.list` need no project
 ## Records
 
 ```ruby
-draft = nohead.records.create("posts", data: { title: "Hello", author: "rec_01J9..." })
-post = nohead.records.get(draft.id, expand: ["author"])
+created = nohead.records.create("posts", data: { title: "Hello", author: "rec_01J9..." })
+post = nohead.records.get(created.id, expand: ["author"])
 nohead.records.update(post.id, data: { title: "Hello again" }) # nil clears a field
 nohead.records.publish(post.id)
+nohead.records.publication(post.id) # since when, by whom, which revision
 nohead.records.schedule(post.id, unpublish_at: Time.utc(2027, 1, 1))
 nohead.records.delete(post.id) # soft delete; records.restore undoes it
 ```
@@ -102,7 +103,7 @@ nohead.records.list("posts", cursor: saved_cursor)
 Filters take a value to equal, or operators: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in` (an array) and `exists`. They combine with AND. On fields with several values, equal means "contains". Values are strings, numbers, booleans, Times (for date fields with a time) and Dates (for plain date fields, sent as `YYYY-MM-DD`); dates take `"today"` too, and dates with a time `"now"`. Lists sort by a field as well, with records that have no value last:
 
 ```ruby
-nohead.records.list("posts", filter: { status: "published", featured: true, author: "rec_01J9..." },
+nohead.records.list("posts", filter: { published_at: { exists: true }, featured: true, author: "rec_01J9..." },
                              sort: "-published_at", expand: %w[author tags])
 
 nohead.records.list("products", filter: { price: { lt: 50 }, category: { in: %w[shoes bags] }, cover: { exists: true } },
@@ -199,7 +200,7 @@ url = nohead.assets.image_url(asset.id, width: 1200, format: "webp").url
 nohead.records.search("posts", "content model").each { |hit| ... }
 
 # Across the project
-results = nohead.search("content model", collections: %w[posts pages])
+results = nohead.search("content model", collections: %w[posts pages], published: true)
 results.meta.total_estimate
 ```
 
@@ -234,7 +235,7 @@ end
 head :no_content
 ```
 
-`unwrap` checks the signature and the timestamp (Standard Webhooks), and raises `Nohead::WebhookVerificationError` if either is off. Pass the raw body: parsing and re-serializing JSON changes the bytes.
+Event types are the activity log's actions (`record.published`, `record.restored`, `field.updated`, `asset.purged`, ...), and a webhook subscribes to types or wildcards (`record.*`, `*`). `event.actor` says who made the change, and `event.via` through which client. `unwrap` checks the signature and the timestamp (Standard Webhooks), and raises `Nohead::WebhookVerificationError` if either is off. After `rotate_secret`, requests carry a signature for the old secret and the new one for 24 hours, so switch the receiver's secret within that day (or end it sooner with `webhooks.secrets.retire`). Pass the raw body: parsing and re-serializing JSON changes the bytes.
 
 It's also available as `nohead.webhooks.unwrap` on a client. Events can arrive more than once, so deduplicate by the `webhook-id` header.
 
@@ -252,16 +253,17 @@ The API's resources come back as `Nohead::NoheadObject`s.
 
 | Resource | Methods |
 |---|---|
-| `records` | `list`, `get`, `create`, `update`, `delete`, `restore`, `publish`, `unpublish`, `schedule`, `unschedule`, `count`, `bulk`, `diff`, `search` |
+| `records` | `list`, `get`, `create`, `update`, `delete`, `restore`, `publish`, `unpublish`, `publication`, `get_schedule`, `schedule`, `unschedule`, `scheduled_changes`, `count`, `bulk`, `diff`, `search` |
 | `records.revisions` | `list`, `get`, `revert` |
 | `search` | across the project |
 | `collections` | `list`, `get`, `create`, `update`, `delete`, `restore`, `schema` |
 | `collections.schema_changes` | `list`, `get` |
 | `collections.search_index` | `get`, `rebuild` |
-| `fields` | `list`, `create`, `update`, `delete`, `restore`, `reorder`, `remove_alias`, `migrate` |
+| `fields` | `list`, `create`, `update`, `delete`, `restore`, `order`, `reorder`, `remove_alias`, `migrate` |
 | `migrations` | `list`, `get`, `cancel` |
 | `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `delete`, `restore`, `purge`, `usage`, `image_url`, `download_url` |
-| `webhooks` | `list`, `get`, `create`, `update`, `delete`, `rotate_secret`, `test`, `unwrap` |
+| `webhooks` | `list`, `get`, `create`, `update`, `delete`, `restore`, `rotate_secret`, `test`, `unwrap` |
+| `webhooks.secrets` | `list`, `retire` |
 | `webhooks.deliveries` | `list`, `get`, `retry` |
 | `audit_events` | `list` |
 | `feature_flags` | `list` |

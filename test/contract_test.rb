@@ -60,6 +60,7 @@ class ContractTest < Minitest::Test
     ->(nohead) { nohead.records.search("posts", "hello", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.search("hello", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.collections.list(limit: 5, cursor: "cur_x") },
+    ->(nohead) { nohead.records.scheduled_changes("posts", sort: "-at", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.collections.schema_changes.list("posts", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.fields.list("posts", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.migrations.list("posts", limit: 5, cursor: "cur_x") },
@@ -67,6 +68,7 @@ class ContractTest < Minitest::Test
     ->(nohead) { nohead.assets.image_url("ast_01J9ZQ3F8X", height: 100, fit: "cover", quality: 80) },
     ->(nohead) { nohead.webhooks.list(limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.webhooks.deliveries.list("wh_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },
+    ->(nohead) { nohead.webhooks.secrets.list("wh_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.audit_events.list(limit: 5, cursor: "cur_x") }
   ].freeze
 

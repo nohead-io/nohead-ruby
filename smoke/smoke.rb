@@ -68,8 +68,9 @@ begin
   expect(chosen.data.map { |record| record.data["title"] } == ["Uno"], "filters take operators")
 
   published = nohead.records.publish(first.id)
-  expect(published.status == "published" && published.published_at, "publish publishes")
-  expect(nohead.records.unpublish(first.id).status == "draft", "unpublish takes it back")
+  expect(published.published_at, "publish publishes")
+  expect(nohead.records.publication(first.id).revision == published.revision, "the publication says what is live")
+  expect(nohead.records.unpublish(first.id).published_at.nil?, "unpublish takes it back")
 
   invalid = raises(Nohead::ValidationError) { nohead.records.create(collection.slug, data: {}) }
   expect(invalid && invalid.details.first&.field == "title", "validation errors name the field")
@@ -80,7 +81,7 @@ begin
   asset = nohead.assets.upload(StringIO.new("hello"), filename: "hello.txt")
   left[:assets] = asset.id
   expect(asset.status == "ready" && asset.byte_size == 5, "assets upload to storage")
-  expect(nohead.assets.delete(asset.id).deleted, "assets soft-delete")
+  expect(nohead.assets.delete(asset.id).deleted_at, "assets soft-delete")
   nohead.assets.purge(asset.id)
   left.delete(:assets)
 
@@ -88,11 +89,12 @@ begin
   left[:webhooks] = webhook.id
   rotated = nohead.webhooks.rotate_secret(webhook.id)
   expect(webhook.secret.start_with?("whsec_") && rotated.secret != webhook.secret,
-         "rotating a webhook's secret replaces it")
-  expect(nohead.webhooks.delete(webhook.id).deleted, "webhooks delete")
+         "rotating a webhook's secret adds one")
+  expect(nohead.webhooks.secrets.list(webhook.id).data.size == 2, "the old secret signs alongside the new one")
+  expect(nohead.webhooks.delete(webhook.id).deleted_at, "webhooks delete")
   left.delete(:webhooks)
 
-  expect(nohead.records.delete(first.id).deleted, "delete soft-deletes")
+  expect(nohead.records.delete(first.id).deleted_at, "delete soft-deletes")
   nohead.collections.delete(collection.id)
   left.delete(:collections)
 ensure

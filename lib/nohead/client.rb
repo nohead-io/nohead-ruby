@@ -52,12 +52,14 @@ module Nohead
     end
 
     # Full-text search across the key's project (or some of its collections),
-    # most relevant first, through the first 1,000 hits.
-    def search(query, collections: nil, status: nil, limit: nil, cursor: nil)
-      paginate("projects_search", query: {
-                 q: query, collections: collections, filter: { status: status }, limit: limit,
-                 cursor: cursor
-               })
+    # most relevant first, through the first 1,000 hits. published: true finds
+    # published records only, false unpublished ones.
+    def search(query, collections: nil, published: nil, limit: nil, cursor: nil)
+      filter = {
+        collection: (collections.nil? ? nil : { in: collections }),
+        published_at: (published.nil? ? nil : { exists: published })
+      }
+      paginate("projects_search", query: { q: query, filter: filter, limit: limit, cursor: cursor })
     end
 
     # The API key's project, from GET /v1/me the first time.

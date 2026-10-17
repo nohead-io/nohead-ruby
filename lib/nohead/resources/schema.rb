@@ -12,9 +12,11 @@ module Nohead
         @search_index = SearchIndexes.new(client)
       end
 
-      # deleted: true lists deleted collections instead (restorable for 30 days).
+      # deleted: true lists deleted collections instead (restorable until
+      # their `purge_after`).
       def list(deleted: nil, limit: nil, cursor: nil)
-        @client.paginate("collections_list", query: { deleted: deleted, limit: limit, cursor: cursor })
+        @client.paginate("collections_list",
+                         query: { filter: { deleted: deleted }, limit: limit, cursor: cursor })
       end
 
       def get(collection)
@@ -80,7 +82,7 @@ module Nohead
     class Fields < Resource
       def list(collection, deleted: nil, limit: nil, cursor: nil)
         @client.paginate("fields_list", path: { collection_id: collection },
-                                        query: { deleted: deleted, limit: limit, cursor: cursor })
+                                        query: { filter: { deleted: deleted }, limit: limit, cursor: cursor })
       end
 
       def create(collection, idempotency_key: nil, change_note: nil, **params)
@@ -106,7 +108,12 @@ module Nohead
                                           idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      # Puts the collection's fields in this order.
+      # The collection's active fields, in order.
+      def order(collection)
+        @client.request("fields_get_order", path: { collection_id: collection })
+      end
+
+      # Puts the collection's fields in this order; lists every active field once.
       def reorder(collection, field_ids, idempotency_key: nil, change_note: nil)
         @client.request("fields_reorder", path: { collection_id: collection },
                                           body: { field_ids: field_ids },

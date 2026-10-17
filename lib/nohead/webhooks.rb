@@ -9,6 +9,11 @@ module Nohead
   #   event = Nohead::Webhooks.unwrap(request.raw_post, request.headers,
   #                                   secret: ENV.fetch("NOHEAD_WEBHOOK_SECRET"))
   #   puts event.data.record.id if event.type == "record.published"
+  #
+  # Event types are the activity log's actions (record.published,
+  # record.restored, field.updated, asset.purged, ...). While a secret
+  # rotation overlaps, requests carry a signature for each secret, so either
+  # one verifies.
   module Webhooks
     # Checks a webhook request's signature and timestamp and returns its event
     # (a NoheadObject: `type`, `data`...). Pass the raw body exactly as
@@ -52,15 +57,18 @@ module Nohead
   module Resources
     # Webhooks of the key's project. `webhook` is a webhook ID ("wh_...").
     class Webhooks < Resource
-      attr_reader :deliveries
+      attr_reader :deliveries, :secrets
 
       def initialize(client)
         super
         @deliveries = Deliveries.new(client)
+        @secrets = Secrets.new(client)
       end
 
-      def list(limit: nil, cursor: nil)
-        @client.paginate("webhooks_list", query: { limit: limit, cursor: cursor })
+      # deleted: true lists deleted webhooks instead (restorable until their
+      # `purge_after`).
+      def list(deleted: nil, limit: nil, cursor: nil)
+        @client.paginate("webhooks_list", query: { filter: { deleted: deleted }, limit: limit, cursor: cursor })
       end
 
       def get(webhook)
@@ -77,11 +85,18 @@ module Nohead
                                            idempotency_key: idempotency_key)
       end
 
+      # Soft-deletes the webhook: restore brings it back until its `purge_after`.
       def delete(webhook, idempotency_key: nil)
         @client.request("webhooks_delete", path: { webhook_id: webhook }, idempotency_key: idempotency_key)
       end
 
-      # A new signing secret; the old one stops working at once.
+      def restore(webhook, idempotency_key: nil)
+        @client.request("webhooks_restore", path: { webhook_id: webhook }, idempotency_key: idempotency_key)
+      end
+
+      # A new signing secret (`secret`, shown only here). The ones before it
+      # keep signing for 24 hours, so receivers can switch without rejecting
+      # deliveries; secrets.retire ends one sooner.
       def rotate_secret(webhook, idempotency_key: nil)
         @client.request("webhooks_rotate_secret", path: { webhook_id: webhook },
                                                   idempotency_key: idempotency_key)
@@ -103,17 +118,34 @@ module Nohead
     class Deliveries < Resource
       def list(webhook, status: nil, limit: nil, cursor: nil)
         @client.paginate("webhook_deliveries_list", path: { webhook_id: webhook },
-                                                    query: { status: status, limit: limit, cursor: cursor })
+                                                    query: { filter: { status: status }, limit: limit,
+                                                             cursor: cursor })
       end
 
       def get(delivery)
         @client.request("webhook_deliveries_get", path: { delivery_id: delivery })
       end
 
-      # Sends the event again.
+      # Sends the event again now, as a new attempt.
       def retry(delivery, idempotency_key: nil)
         @client.request("webhook_deliveries_retry", path: { delivery_id: delivery },
                                                     idempotency_key: idempotency_key)
+      end
+    end
+
+    # A webhook's signing secrets. `secret` is a secret ID ("whs_...").
+    class Secrets < Resource
+      # Those signing deliveries now, oldest first, without their values.
+      def list(webhook, limit: nil, cursor: nil)
+        @client.paginate("webhook_secrets_list", path: { webhook_id: webhook },
+                                                 query: { limit: limit, cursor: cursor })
+      end
+
+      # Stops signing with it now. The newest can't be retired (ConflictError,
+      # detail code `newest_secret`): rotate first.
+      def retire(secret, idempotency_key: nil)
+        @client.request("webhook_secrets_retire", path: { secret_id: secret },
+                                                  idempotency_key: idempotency_key)
       end
     end
   end
