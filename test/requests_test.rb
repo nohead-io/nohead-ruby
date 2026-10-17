@@ -101,6 +101,12 @@ class RequestsTest < Minitest::Test
     assert_equal "Rettet%20p%C3%A5%20forsiden%20%E2%9C%93", transport.requests.first.headers["Nohead-Change-Note"]
   end
 
+  def test_change_note_in_another_encoding_is_sent_as_utf8
+    nohead, transport = client([json(200, record("rec_1"))])
+    nohead.records.delete("rec_1", change_note: "Bl\xE5b\xE6r".dup.force_encoding(Encoding::ISO_8859_1))
+    assert_equal "Bl%C3%A5b%C3%A6r", transport.requests.first.headers["Nohead-Change-Note"]
+  end
+
   def test_dry_runs_are_query_parameters
     nohead, transport = client([json(200, {})])
     nohead.fields.migrate("fld_1", type: "integer", dry_run: true)
