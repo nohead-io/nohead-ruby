@@ -212,7 +212,12 @@ module Nohead
         revision = if_match.respond_to?(:revision) ? if_match.revision : if_match
         headers["If-Match"] = %("#{revision}")
       end
-      headers["Nohead-Change-Note"] = change_note if change_note
+      # Percent-encoded UTF-8, as encodeURIComponent: header values are bytes
+      # (the API decodes it). Notes in other encodings are converted first.
+      if change_note
+        note = change_note.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
+        headers["Nohead-Change-Note"] = URI.encode_uri_component(note)
+      end
       headers
     end
 
