@@ -60,8 +60,8 @@ module Nohead
         @client.request("assets_restore", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end
 
-      # Deletes a deleted asset for good, now instead of at its `purge_after`
-      # delete, and returns it as it was. It can't be restored, and its image
+      # Deletes a deleted asset for good, now instead of at its `purge_after`,
+      # and returns it as it was. It can't be restored, and its image
       # URLs stop working. Raises ConflictError if the asset isn't deleted.
       def purge(asset, idempotency_key: nil)
         @client.request("assets_purge", path: { asset_id: asset }, idempotency_key: idempotency_key)

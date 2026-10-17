@@ -141,7 +141,8 @@ module Nohead
                                                  query: { limit: limit, cursor: cursor })
       end
 
-      # Stops signing with it now. The newest can't be retired: rotate first.
+      # Stops signing with it now. The newest can't be retired (ConflictError,
+      # detail code `newest_secret`): rotate first.
       def retire(secret, idempotency_key: nil)
         @client.request("webhook_secrets_retire", path: { secret_id: secret },
                                                   idempotency_key: idempotency_key)

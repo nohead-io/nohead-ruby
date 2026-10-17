@@ -235,7 +235,7 @@ end
 head :no_content
 ```
 
-Event types are the activity log's actions (`record.published`, `record.restored`, `field.updated`, `asset.purged`, ...), and a webhook subscribes to types or wildcards (`record.*`, `*`). Each event's `data` says who made the change (`actor`) and through which client (`via`). `unwrap` checks the signature and the timestamp (Standard Webhooks), and raises `Nohead::WebhookVerificationError` if either is off. After `rotate_secret`, requests carry a signature for the old secret and the new one for 24 hours, so switch the receiver's secret within that day (or end it sooner with `webhooks.secrets.retire`). Pass the raw body: parsing and re-serializing JSON changes the bytes.
+Event types are the activity log's actions (`record.published`, `record.restored`, `field.updated`, `asset.purged`, ...), and a webhook subscribes to types or wildcards (`record.*`, `*`). `event.actor` says who made the change, and `event.via` through which client. `unwrap` checks the signature and the timestamp (Standard Webhooks), and raises `Nohead::WebhookVerificationError` if either is off. After `rotate_secret`, requests carry a signature for the old secret and the new one for 24 hours, so switch the receiver's secret within that day (or end it sooner with `webhooks.secrets.retire`). Pass the raw body: parsing and re-serializing JSON changes the bytes.
 
 It's also available as `nohead.webhooks.unwrap` on a client. Events can arrive more than once, so deduplicate by the `webhook-id` header.
 
