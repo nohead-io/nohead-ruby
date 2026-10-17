@@ -5,7 +5,7 @@
 #   require "nohead"
 #
 #   nohead = Nohead::Client.new # NOHEAD_API_KEY
-#   nohead.records.list("posts", filter: { status: "published" }).each do |post|
+#   nohead.records.list("posts", filter: { published_at: { exists: true } }).each do |post|
 #     puts post.data["title"]
 #   end
 module Nohead; end

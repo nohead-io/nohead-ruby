@@ -42,9 +42,10 @@ class PaginationTest < Minitest::Test
 
   def test_search_totals
     nohead, transport = client([page([record("r")], nil, total_estimate: 1)])
-    hits = nohead.search("hello", collections: %w[posts pages])
+    hits = nohead.search("hello", collections: %w[posts pages], published: true)
     assert_equal 1, hits.meta.total_estimate
     assert_equal "/v1/projects/prj_1/search", transport.requests.first.path
-    assert_equal "posts,pages", transport.requests.first.params["collections"]
+    assert_equal "posts,pages", transport.requests.first.params["filter[collection][in]"]
+    assert_equal "true", transport.requests.first.params["filter[published_at][exists]"]
   end
 end

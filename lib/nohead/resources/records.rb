@@ -22,20 +22,20 @@ module Nohead
       end
 
       # A collection's records, newest first by default. `filter` holds
-      # equality filters ({ status: "published" }), `expand` relation or asset
-      # fields to embed under `expanded` (at most 5).
+      # filters ({ published_at: { exists: true } } for published records),
+      # `expand` relation or asset fields to embed under `expanded` (at most 5).
       def list(collection, filter: nil, sort: nil, expand: nil, limit: nil, cursor: nil)
         @client.paginate("records_list", path: { collection_id: collection }, query: {
                            filter: filter, sort: sort, expand: expand, limit: limit, cursor: cursor
                          })
       end
 
-      def get(record, expand: nil, include_deleted: nil)
-        @client.request("records_get", path: { record_id: record },
-                                       query: { expand: expand, include_deleted: include_deleted })
+      # A deleted record too, with `deleted_at` and `purge_after`.
+      def get(record, expand: nil)
+        @client.request("records_get", path: { record_id: record }, query: { expand: expand })
       end
 
-      # Creates a draft: create("posts", data: { title: "Hello" }).
+      # Creates an unpublished record: create("posts", data: { title: "Hello" }).
       def create(collection, idempotency_key: nil, change_note: nil, **params)
         @client.request("records_create", path: { collection_id: collection }, body: params,
                                           idempotency_key: idempotency_key, change_note: change_note)
@@ -48,7 +48,8 @@ module Nohead
                                           change_note: change_note)
       end
 
-      # Soft-deletes the record: restore brings it back within 30 days.
+      # Soft-deletes the record: restore brings it back until its `purge_after`.
+      # Deleting a deleted record changes nothing.
       def delete(record, if_match: nil, idempotency_key: nil, change_note: nil)
         @client.request("records_delete", path: { record_id: record }, if_match: if_match,
                                           idempotency_key: idempotency_key, change_note: change_note)
@@ -69,7 +70,21 @@ module Nohead
                                              idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      # Publishes and/or unpublishes the record later. Times left out keep
+      # What is live: since when, by whom, and the revision. Raises
+      # NotFoundError (detail code `not_published`) for a record that isn't
+      # published.
+      def publication(record)
+        @client.request("records_get_publication", path: { record_id: record })
+      end
+
+      # When the record publishes or unpublishes on its own. Raises
+      # NotFoundError (detail code `not_scheduled`) for a record with no
+      # schedule.
+      def get_schedule(record)
+        @client.request("records_get_schedule", path: { record_id: record })
+      end
+
+      # Publishes and/or unpublishes the record later, and returns the schedule. Times left out keep
       # their value; name them in `clear` to remove them.
       def schedule(record, publish_at: nil, unpublish_at: nil, clear: [], idempotency_key: nil)
         body = clear.to_h { |name| [name.to_s, nil] }
@@ -83,6 +98,14 @@ module Nohead
       def unschedule(record, idempotency_key: nil)
         @client.request("records_unschedule", path: { record_id: record },
                                               idempotency_key: idempotency_key)
+      end
+
+      # A collection's pending scheduled publishes and unpublishes, soonest
+      # first: one per change, so a record due to publish and later unpublish
+      # appears twice.
+      def scheduled_changes(collection, sort: nil, limit: nil, cursor: nil)
+        @client.paginate("scheduled_changes_list", path: { collection_id: collection },
+                                                   query: { sort: sort, limit: limit, cursor: cursor })
       end
 
       def count(collection, filter: nil)
