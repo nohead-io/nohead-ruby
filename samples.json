@@ -52,7 +52,7 @@
   "records_unpublish": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.records.unpublish(\"rec_01J9ZQ3F8X\")\n",
   "records_unschedule": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.records.unschedule(\"rec_01J9ZQ3F8X\")\n",
   "records_update": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.records.update(\"rec_01J9ZQ3F8X\", data: { title: \"Hey\" }, if_match: 1)\n",
-  "scheduled_changes_list": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nnohead.records.scheduled_changes(\"posts\").each do |change|\n  puts change\nend\n",
+  "scheduled_changes_list": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nnohead.records.scheduled_changes(\"posts\", sort: \"-at\").each do |change|\n  puts change\nend\n",
   "schema_changes_get": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.collections.schema_changes.get(\"posts\", \"sch_01J9ZQ3F8X\")\n",
   "schema_changes_list": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nnohead.collections.schema_changes.list(\"posts\").each do |change|\n  puts change\nend\n",
   "search_index_get": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.collections.search_index.get(\"posts\")\n",

@@ -20,7 +20,7 @@ module Calls
     ->(nohead) { nohead.records.get_schedule("rec_01J9ZQ3F8X") },
     ->(nohead) { nohead.records.schedule("rec_01J9ZQ3F8X", publish_at: Time.utc(2027, 1, 1)) },
     ->(nohead) { nohead.records.unschedule("rec_01J9ZQ3F8X") },
-    ->(nohead) { nohead.records.scheduled_changes("posts") },
+    ->(nohead) { nohead.records.scheduled_changes("posts", sort: "-at") },
     ->(nohead) { nohead.records.count("posts", filter: { published_at: { exists: false } }) },
     ->(nohead) { nohead.records.bulk("posts", action: "publish", record_ids: ["rec_01J9ZQ3F8X"]) },
     ->(nohead) { nohead.records.diff("rec_01J9ZQ3F8X", 1, 2) },
