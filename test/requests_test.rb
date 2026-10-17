@@ -95,6 +95,12 @@ class RequestsTest < Minitest::Test
     assert_equal "Duplicate", transport.requests.first.headers["Nohead-Change-Note"]
   end
 
+  def test_change_note_in_any_language_percent_encoded
+    nohead, transport = client([json(200, record("rec_1"))])
+    nohead.records.delete("rec_1", change_note: "Rettet på forsiden ✓")
+    assert_equal "Rettet%20p%C3%A5%20forsiden%20%E2%9C%93", transport.requests.first.headers["Nohead-Change-Note"]
+  end
+
   def test_dry_runs_are_query_parameters
     nohead, transport = client([json(200, {})])
     nohead.fields.migrate("fld_1", type: "integer", dry_run: true)
