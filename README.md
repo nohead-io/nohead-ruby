@@ -81,6 +81,22 @@ Methods return the API's resources (see [Results](#results)) and raise on failur
 - `diff(record, from_revision, to_revision)`
 - `revisions.list`, `revisions.get` and `revisions.revert` (with `dry_run: true` for a preview)
 
+## Drafts
+
+A draft holds changes to a record until they are merged, now or at a set time, while the record keeps its current content: changes to review before they go live, or changes due later.
+
+```ruby
+draft = nohead.drafts.create(post.id, data: { title: "Hello, revised" })
+nohead.drafts.update(draft.id, data: { summary: "..." }, if_match: draft)
+preview = nohead.drafts.get(draft.id, expand: ["author"]) # data as it would read
+nohead.drafts.merge(draft.id) # or drafts.schedule(draft.id, merge_at: ...)
+```
+
+- A record has at most one draft; starting a second raises `Nohead::ConflictError` (detail code `draft_exists`, with its `draft_id`).
+- A merge changes content only: a live record stays live, an unpublished one unpublished. Publishing a live record with a pending draft raises `ConflictError` (`draft_pending`).
+- `records.drafts(id)` lists a record's draft, and `drafts.list(collection, record_id: ...)` a collection's (`record_id` takes up to 100 IDs).
+- `drafts.discard` deletes one for good.
+
 ## Pagination
 
 List methods return the first page, a `Nohead::Page`. It's Enumerable: `each`, `map`, `first` and so on walk every item across pages, fetching the next page only when needed.
@@ -253,7 +269,8 @@ The API's resources come back as `Nohead::NoheadObject`s.
 
 | Resource | Methods |
 |---|---|
-| `records` | `list`, `get`, `create`, `update`, `delete`, `restore`, `publish`, `unpublish`, `publication`, `get_schedule`, `schedule`, `unschedule`, `scheduled_changes`, `count`, `bulk`, `diff`, `search` |
+| `records` | `list`, `get`, `create`, `update`, `delete`, `restore`, `publish`, `unpublish`, `publication`, `get_schedule`, `schedule`, `unschedule`, `scheduled_changes`, `drafts`, `count`, `bulk`, `diff`, `search` |
+| `drafts` | `create`, `list`, `get`, `update`, `discard`, `merge`, `schedule`, `unschedule` |
 | `records.revisions` | `list`, `get`, `revert` |
 | `search` | across the project |
 | `collections` | `list`, `get`, `create`, `update`, `delete`, `restore`, `schema` |

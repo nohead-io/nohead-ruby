@@ -40,6 +40,14 @@ class PaginationTest < Minitest::Test
     assert_equal "saved", transport.requests.first.params["cursor"]
   end
 
+  def test_lists_drafts_by_record
+    nohead, transport = client([page([], nil), page([], nil)])
+    nohead.drafts.list("posts", record_id: "rec_1").data
+    nohead.drafts.list("posts", record_id: %w[rec_1 rec_2]).data
+    assert_equal "rec_1", transport.requests[0].params["filter[record_id]"]
+    assert_equal "rec_1,rec_2", transport.requests[1].params["filter[record_id][in]"]
+  end
+
   def test_search_totals
     nohead, transport = client([page([record("r")], nil, total_estimate: 1)])
     hits = nohead.search("hello", collections: %w[posts pages], published: true)

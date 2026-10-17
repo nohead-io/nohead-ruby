@@ -70,6 +70,11 @@ begin
   published = nohead.records.publish(first.id)
   expect(published.published_at, "publish publishes")
   expect(nohead.records.publication(first.id).revision == published.revision, "the publication says what is live")
+  draft = nohead.drafts.create(first.id, data: { title: "Uno, revised" })
+  expect(nohead.records.get(first.id).data["title"] == "Uno", "a draft leaves the live record as it is")
+  merged = nohead.drafts.merge(draft.id, if_match: draft)
+  expect(merged.data["title"] == "Uno, revised" && merged.published_at == published.published_at,
+         "merging a draft changes the content, not the publication")
   expect(nohead.records.unpublish(first.id).published_at.nil?, "unpublish takes it back")
 
   invalid = raises(Nohead::ValidationError) { nohead.records.create(collection.slug, data: {}) }
