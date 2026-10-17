@@ -274,6 +274,7 @@ The SDK covers every operation an API key can call. Organizations, projects, mem
 
 ```bash
 bundle install
+lefthook install            # a pre-commit secret scan (brew install lefthook gitleaks)
 bundle exec rake test       # unit and contract tests
 bundle exec rubocop
 bundle exec rake generate   # after updating openapi.json
