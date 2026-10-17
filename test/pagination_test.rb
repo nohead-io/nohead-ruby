@@ -46,6 +46,7 @@ class PaginationTest < Minitest::Test
     nohead.drafts.list("posts", record_id: %w[rec_1 rec_2]).data
     assert_equal "rec_1", transport.requests[0].params["filter[record_id]"]
     assert_equal "rec_1,rec_2", transport.requests[1].params["filter[record_id][in]"]
+    assert_raises(ArgumentError) { nohead.drafts.list("posts", record_id: []) }
   end
 
   def test_search_totals

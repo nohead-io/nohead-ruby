@@ -17,8 +17,11 @@ module Nohead
       end
 
       # A collection's drafts, most recently changed first. `record_id`
-      # narrows them to one record, or to several (an Array, up to 100).
+      # narrows them to one record, or to several (an Array of 1 to 100; an
+      # empty one raises ArgumentError, since it would match no record).
       def list(collection, record_id: nil, sort: nil, limit: nil, cursor: nil)
+        raise ArgumentError, "record_id needs at least one record ID" if record_id == []
+
         record_filter = record_id.is_a?(Array) ? { in: record_id } : record_id
         @client.paginate("drafts_list", path: { collection_id: collection },
                                         query: { filter: { record_id: record_filter }, sort: sort,
