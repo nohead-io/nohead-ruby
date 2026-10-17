@@ -60,6 +60,8 @@ module Nohead
                                            idempotency_key: idempotency_key, change_note: change_note)
       end
 
+      # A live record with a pending draft raises ConflictError (detail code
+      # `draft_pending`): publishing never merges a draft (drafts.merge does).
       def publish(record, if_match: nil, idempotency_key: nil, change_note: nil)
         @client.request("records_publish", path: { record_id: record }, if_match: if_match,
                                            idempotency_key: idempotency_key, change_note: change_note)
@@ -98,6 +100,11 @@ module Nohead
       def unschedule(record, idempotency_key: nil)
         @client.request("records_unschedule", path: { record_id: record },
                                               idempotency_key: idempotency_key)
+      end
+
+      # The record's drafts: at most one for now.
+      def drafts(record, limit: nil, cursor: nil)
+        @client.paginate("record_drafts_list", path: { record_id: record }, query: { limit: limit, cursor: cursor })
       end
 
       # A collection's pending scheduled publishes and unpublishes, soonest
