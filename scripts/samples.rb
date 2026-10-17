@@ -19,7 +19,8 @@ require_relative "../test/calls"
 
 # What a list's items are called in the block, by operation.
 ITEMS = { "record_revisions" => "revision", "schema_changes" => "change",
-          "webhook_deliveries" => "delivery", "audit_events" => "event",
+          "webhook_deliveries" => "delivery", "webhook_secrets" => "secret",
+          "scheduled_changes" => "change", "audit_events" => "event",
           "collections_search" => "record", "projects_search" => "record" }.freeze
 ROUTES = Nohead::OPERATIONS.map do |id, (method, path)|
   [id, method, Regexp.new("\\A#{path.gsub(/\{\w+\}/, '[^/]+')}\\z")]
