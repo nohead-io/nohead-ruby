@@ -5,7 +5,7 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
-## Unreleased
+## 0.5.0
 
 - **Breaking:** field migrations are created under their collection:
   `migrations.create(collection, field_id:, ..., dry_run: true)`
