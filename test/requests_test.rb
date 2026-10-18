@@ -13,11 +13,11 @@ class RequestsTest < Minitest::Test
 
   def test_serializes_filters_sorts_and_expansions
     nohead, transport = client([page([], nil)])
-    nohead.records.list("posts", filter: { status: "published", featured: true, views: 3,
+    nohead.records.list("posts", filter: { category: "news", featured: true, views: 3,
                                            published_after: Time.utc(2026, 1, 1), skip: nil },
                                  sort: "-published_at", expand: %w[author tags], limit: 50)
     params = transport.requests.first.params
-    assert_equal "published", params["filter[status]"]
+    assert_equal "news", params["filter[category]"]
     assert_equal "true", params["filter[featured]"]
     assert_equal "3", params["filter[views]"]
     assert_equal "2026-01-01T00:00:00.000Z", params["filter[published_after]"]
@@ -30,12 +30,12 @@ class RequestsTest < Minitest::Test
 
   def test_serializes_filter_operators_escaping_commas_in_lists
     nohead, transport = client([page([], nil)])
-    nohead.records.list("products", filter: { status: { ne: "draft" }, price: { gte: 10, lt: 50 },
+    nohead.records.list("products", filter: { brand: { ne: "acme" }, price: { gte: 10, lt: 50 },
                                               category: { in: ["shoes", "hats, caps", "a\\b"] },
                                               cover: { exists: true }, released: { gte: Date.new(2026, 10, 9) } },
                                     sort: "-price")
     params = transport.requests.first.params
-    assert_equal "draft", params["filter[status][ne]"]
+    assert_equal "acme", params["filter[brand][ne]"]
     assert_equal "10", params["filter[price][gte]"]
     assert_equal "50", params["filter[price][lt]"]
     assert_equal "shoes,hats\\, caps,a\\\\b", params["filter[category][in]"]
@@ -53,16 +53,19 @@ class RequestsTest < Minitest::Test
     assert_equal({ "data" => { "title" => "Hi" } }, request.json)
   end
 
+  SCHEDULE = { object: "schedule", record_id: "rec_1", publish_at: nil, unpublish_at: nil, last_error: nil }.freeze
+
   def test_serializes_times_in_bodies
-    nohead, transport = client([json(200, record("rec_1"))])
+    nohead, transport = client([json(200, SCHEDULE)])
     nohead.records.schedule("rec_1", publish_at: Time.utc(2027, 1, 1, 9))
     assert_equal({ "publish_at" => "2027-01-01T09:00:00.000Z" }, transport.requests.first.json)
   end
 
-  def test_clears_scheduled_times
-    nohead, transport = client([json(200, record("rec_1"))])
-    nohead.records.schedule("rec_1", clear: [:unpublish_at])
-    assert_equal({ "unpublish_at" => nil }, transport.requests.first.json)
+  def test_schedule_sends_the_whole_schedule
+    nohead, transport = client([json(200, SCHEDULE)])
+    nohead.records.schedule("rec_1", unpublish_at: "2027-02-01T00:00:00Z")
+    nohead.records.schedule("rec_1")
+    assert_equal([{ "unpublish_at" => "2027-02-01T00:00:00Z" }, {}], transport.requests.map(&:json))
   end
 
   def test_idempotency_keys_on_writes_only
@@ -116,7 +119,49 @@ class RequestsTest < Minitest::Test
 
   def test_diff_names_its_revisions
     nohead, transport = client([json(200, { object: "record_diff", from: 1, to: 2, changes: [] })])
-    nohead.records.diff("rec_1", 1, 2)
+    nohead.records.diff("rec_1", from: 1, to: 2)
     assert_equal({ "from" => "1", "to" => "2" }, transport.requests.first.params)
+  end
+
+  def test_options_a_method_does_not_take_are_not_sent_as_body_fields
+    nohead, transport = client([json(201, {})])
+    [
+      -> { nohead.webhooks.create(url: "https://example.com/hook", event_types: ["*"], change_note: "New") },
+      -> { nohead.webhooks.update("wh_1", enabled: false, change_note: "Off") },
+      -> { nohead.assets.create_upload(filename: "a.txt", content_type: "text/plain", byte_size: 1, change_note: "x") },
+      -> { nohead.records.create("posts", data: {}, if_match: 1) },
+      -> { nohead.collections.update("posts", name: "Articles", if_match: 1) }
+    ].each do |call|
+      error = assert_raises(ArgumentError, &call)
+      assert_match(/unknown keyword: :(change_note|if_match)/, error.message)
+    end
+    assert_empty transport.requests
+  end
+
+  def test_audit_event_filters
+    nohead, transport = client([page([], nil)])
+    nohead.audit_events.list(filter: { type: "record.*", resource_type: %w[record draft], actor_type: "api_key",
+                                       created_at: { gte: Time.utc(2026, 10, 1), lt: "2026-11-01T00:00:00Z" } })
+    nohead.audit_events.list(filter: { "resource_type" => "field" })
+    first, second = transport.requests.map(&:params)
+    assert_equal({ "filter[type]" => "record.*", "filter[resource_type][in]" => "record,draft",
+                   "filter[actor_type]" => "api_key", "filter[created_at][gte]" => "2026-10-01T00:00:00.000Z",
+                   "filter[created_at][lt]" => "2026-11-01T00:00:00Z" }, first)
+    assert_equal({ "filter[resource_type]" => "field" }, second)
+  end
+
+  def test_revision_filters
+    nohead, transport = client([page([], nil)])
+    nohead.records.revisions.list("rec_1", filter: { operation: "merge", created_at: { gt: Time.utc(2026, 10, 1) } })
+    assert_equal({ "filter[operation]" => "merge", "filter[created_at][gt]" => "2026-10-01T00:00:00.000Z" },
+                 transport.requests.first.params)
+  end
+
+  def test_restore_and_revert_take_if_match_and_a_change_note
+    nohead, transport = client([json(200, record("rec_1"))])
+    nohead.records.restore("rec_1", if_match: 4, change_note: "Back")
+    nohead.records.revisions.revert("rec_1", 2, if_match: 5, change_note: "Undo")
+    assert_equal([['"4"', "Back"], ['"5"', "Undo"]],
+                 transport.requests.map { |request| request.headers.values_at("If-Match", "Nohead-Change-Note") })
   end
 end

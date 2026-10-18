@@ -4,11 +4,27 @@ module Nohead
   module Resources
     # The base of the resources: each holds the client it sends requests with.
     class Resource
+      # Request options that are headers, not body fields.
+      OPTIONS = %i[change_note if_match].freeze
+
       def initialize(client)
         @client = client
       end
 
       def inspect = "#<#{self.class.name}>"
+
+      private
+
+      # The keyword arguments a method sends as the body. SDK options would
+      # land there when the method doesn't take them (its operation doesn't
+      # declare the header), so they raise ArgumentError as Ruby does for
+      # unknown keywords.
+      def body_of(params)
+        option = OPTIONS.find { |name| params.key?(name) }
+        raise ArgumentError, "unknown keyword: :#{option}" if option
+
+        params
+      end
     end
 
     # Records: the content of a collection. `collection` is a collection ID or
@@ -37,13 +53,13 @@ module Nohead
 
       # Creates an unpublished record: create("posts", data: { title: "Hello" }).
       def create(collection, idempotency_key: nil, change_note: nil, **params)
-        @client.request("records_create", path: { collection_id: collection }, body: params,
+        @client.request("records_create", path: { collection_id: collection }, body: body_of(params),
                                           idempotency_key: idempotency_key, change_note: change_note)
       end
 
       # Sets the given fields (nil clears one); others keep their values.
       def update(record, if_match: nil, idempotency_key: nil, change_note: nil, **params)
-        @client.request("records_update", path: { record_id: record }, body: params,
+        @client.request("records_update", path: { record_id: record }, body: body_of(params),
                                           if_match: if_match, idempotency_key: idempotency_key,
                                           change_note: change_note)
       end
@@ -55,8 +71,8 @@ module Nohead
                                           idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      def restore(record, idempotency_key: nil, change_note: nil)
-        @client.request("records_restore", path: { record_id: record },
+      def restore(record, if_match: nil, idempotency_key: nil, change_note: nil)
+        @client.request("records_restore", path: { record_id: record }, if_match: if_match,
                                            idempotency_key: idempotency_key, change_note: change_note)
       end
 
@@ -86,13 +102,12 @@ module Nohead
         @client.request("records_get_schedule", path: { record_id: record })
       end
 
-      # Publishes and/or unpublishes the record later, and returns the schedule. Times left out keep
-      # their value; name them in `clear` to remove them.
-      def schedule(record, publish_at: nil, unpublish_at: nil, clear: [], idempotency_key: nil)
-        body = clear.to_h { |name| [name.to_s, nil] }
-        body["publish_at"] = publish_at unless publish_at.nil?
-        body["unpublish_at"] = unpublish_at unless unpublish_at.nil?
-        @client.request("records_schedule", path: { record_id: record }, body: body,
+      # Sets when the record publishes and/or unpublishes on its own, and
+      # returns the schedule. It replaces the whole schedule: a time left out
+      # is cleared (schedule(record, publish_at: t) drops a set unpublish_at).
+      def schedule(record, publish_at: nil, unpublish_at: nil, idempotency_key: nil)
+        @client.request("records_schedule", path: { record_id: record },
+                                            body: { publish_at: publish_at, unpublish_at: unpublish_at }.compact,
                                             idempotency_key: idempotency_key)
       end
 
@@ -123,14 +138,13 @@ module Nohead
       # Publishes, unpublishes, deletes, restores or updates up to 100 records.
       # Each record succeeds or fails on its own; see `results`.
       def bulk(collection, idempotency_key: nil, change_note: nil, **params)
-        @client.request("records_bulk", path: { collection_id: collection }, body: params,
+        @client.request("records_bulk", path: { collection_id: collection }, body: body_of(params),
                                         idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      # The changes between two revisions.
-      def diff(record, from_revision, to_revision)
-        @client.request("records_diff", path: { record_id: record },
-                                        query: { from: from_revision, to: to_revision })
+      # The changes between two revisions: diff(record, from: 1, to: 2).
+      def diff(record, from:, to:)
+        @client.request("records_diff", path: { record_id: record }, query: { from: from, to: to })
       end
 
       # Full-text search in one collection (search_enabled collections), most
@@ -145,7 +159,8 @@ module Nohead
 
     # A record's version history. `revision` is a revision number.
     class Revisions < Resource
-      # Newest first. `filter` takes operation, actor_id, since and until.
+      # Newest first. `filter` takes `operation`, `actor_id` and a `created_at`
+      # range ({ created_at: { gte: Time.utc(2026, 10, 1) } }).
       def list(record, filter: nil, limit: nil, cursor: nil)
         @client.paginate("record_revisions_list", path: { record_id: record },
                                                   query: { filter: filter, limit: limit, cursor: cursor })
@@ -157,10 +172,10 @@ module Nohead
 
       # Restores the record's data as of `revision`, as a new revision. With
       # dry_run: true, previews it.
-      def revert(record, revision, dry_run: false, if_match: nil, idempotency_key: nil)
+      def revert(record, revision, dry_run: false, if_match: nil, idempotency_key: nil, change_note: nil)
         @client.request("record_revisions_revert", path: { record_id: record, revision: revision },
-                                                   query: { dry_run: dry_run || nil },
-                                                   if_match: if_match, idempotency_key: idempotency_key)
+                                                   query: { dry_run: dry_run || nil }, if_match: if_match,
+                                                   idempotency_key: idempotency_key, change_note: change_note)
       end
     end
   end

@@ -53,13 +53,11 @@ module Nohead
     end
 
     # Full-text search across the key's project (or some of its collections),
-    # most relevant first, through the first 1,000 hits. published: true finds
-    # published records only, false unpublished ones.
-    def search(query, collections: nil, published: nil, limit: nil, cursor: nil)
-      filter = {
-        collection: (collections.nil? ? nil : { in: collections }),
-        published_at: (published.nil? ? nil : { exists: published })
-      }
+    # most relevant first, through the first 1,000 hits. `filter` takes
+    # `published_at` ({ published_at: { exists: true } } for published
+    # records), as records.list does.
+    def search(query, collections: nil, filter: nil, limit: nil, cursor: nil)
+      filter = { collection: (collections.nil? ? nil : { in: collections }), **filter.to_h }
       paginate("projects_search", query: { q: query, filter: filter, limit: limit, cursor: cursor })
     end
 

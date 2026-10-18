@@ -41,11 +41,28 @@ class UploadsTest < Minitest::Test
   end
 
   def test_uses_an_idempotency_key_only_to_start_the_upload
-    nohead, transport = client([created, stored, ready])
-    nohead.assets.upload(StringIO.new("x"), idempotency_key: "k1")
+    nohead, transport = client([created, json(200, asset("pending")), stored, ready])
+    assert_equal "ready", nohead.assets.upload(StringIO.new("x"), idempotency_key: "k1").status
+    assert_equal(["POST /v1/projects/prj_1/assets", "GET /v1/assets/ast_1", "PUT /uploads/prj_1/ast_1",
+                  "POST /v1/assets/ast_1/complete"],
+                 transport.requests.map { |request| "#{request.method} #{request.path}" })
     keys = transport.requests.map { |request| request.headers["Idempotency-Key"] }
     assert_equal "k1", keys[0]
-    assert_match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/, keys[2])
+    assert_nil keys[1]
+    assert_match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/, keys[3])
+  end
+
+  def test_resumes_an_upload_that_is_already_done
+    nohead, transport = client([created, ready])
+    assert_equal "ready", nohead.assets.upload(StringIO.new("x"), idempotency_key: "k1").status
+    assert_equal(["POST /v1/projects/prj_1/assets", "GET /v1/assets/ast_1"],
+                 transport.requests.map { |request| "#{request.method} #{request.path}" })
+  end
+
+  def test_checks_for_a_finished_upload_only_with_an_idempotency_key
+    nohead, transport = client([created, stored, ready])
+    nohead.assets.upload(StringIO.new("x"))
+    assert_equal %w[POST PUT POST], transport.requests.map(&:method)
   end
 
   def test_uploads_bytes_in_a_stringio

@@ -25,16 +25,17 @@ module Nohead
 
       # Creates a collection, optionally with its fields.
       def create(idempotency_key: nil, change_note: nil, **params)
-        @client.request("collections_create", body: params, idempotency_key: idempotency_key,
+        @client.request("collections_create", body: body_of(params), idempotency_key: idempotency_key,
                                               change_note: change_note)
       end
 
       def update(collection, idempotency_key: nil, change_note: nil, **params)
-        @client.request("collections_update", path: { collection_id: collection }, body: params,
+        @client.request("collections_update", path: { collection_id: collection }, body: body_of(params),
                                               idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      # Soft-deletes the collection and its records for 30 days.
+      # Soft-deletes the collection and its records: restore brings them back
+      # until its `purge_after`.
       def delete(collection, idempotency_key: nil, change_note: nil)
         @client.request("collections_delete", path: { collection_id: collection },
                                               idempotency_key: idempotency_key, change_note: change_note)
@@ -85,19 +86,24 @@ module Nohead
                                         query: { filter: { deleted: deleted }, limit: limit, cursor: cursor })
       end
 
+      def get(field)
+        @client.request("fields_get", path: { field_id: field })
+      end
+
       def create(collection, idempotency_key: nil, change_note: nil, **params)
-        @client.request("fields_create", path: { collection_id: collection }, body: params,
+        @client.request("fields_create", path: { collection_id: collection }, body: body_of(params),
                                          idempotency_key: idempotency_key, change_note: change_note)
       end
 
       # Renames, describes or loosens a field. Changes that rewrite record
       # values (type, multiple, tighter rules) are `migrate`.
       def update(field, idempotency_key: nil, change_note: nil, **params)
-        @client.request("fields_update", path: { field_id: field }, body: params,
+        @client.request("fields_update", path: { field_id: field }, body: body_of(params),
                                          idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      # Soft-deletes the field: its values return with `restore` for 30 days.
+      # Soft-deletes the field: its values return with `restore` until its
+      # `purge_after`.
       def delete(field, idempotency_key: nil, change_note: nil)
         @client.request("fields_delete", path: { field_id: field },
                                          idempotency_key: idempotency_key, change_note: change_note)
@@ -114,7 +120,7 @@ module Nohead
       end
 
       # Puts the collection's fields in this order; lists every active field once.
-      def reorder(collection, field_ids, idempotency_key: nil, change_note: nil)
+      def reorder(collection, field_ids:, idempotency_key: nil, change_note: nil)
         @client.request("fields_reorder", path: { collection_id: collection },
                                           body: { field_ids: field_ids },
                                           idempotency_key: idempotency_key, change_note: change_note)
@@ -130,7 +136,7 @@ module Nohead
       # backfill) that rewrites every record. With dry_run: true, previews it.
       def migrate(field, dry_run: false, idempotency_key: nil, change_note: nil, **params)
         @client.request("fields_migrate", path: { field_id: field }, query: { dry_run: dry_run || nil },
-                                          body: params, idempotency_key: idempotency_key,
+                                          body: body_of(params), idempotency_key: idempotency_key,
                                           change_note: change_note)
       end
     end

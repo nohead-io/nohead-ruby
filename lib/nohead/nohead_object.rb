@@ -6,8 +6,8 @@ module Nohead
   # What the SDK returns for the API's resources: read fields as methods
   # (`record.data`) or with `[]` (`record["data"]`), nested objects included.
   # Fields named like Ruby's own methods (`method`, `hash`...) need `[]`.
-  # Timestamps (`*_at`) are Times. Unknown fields are kept: the API adds
-  # fields without notice.
+  # Timestamps (the contract's: `created_at`, `purge_after`, `at`...) are
+  # Times. Unknown fields are kept: the API adds fields without notice.
   class NoheadObject
     ISO_TIME = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/
 
@@ -16,7 +16,7 @@ module Nohead
       when Hash then new(value)
       when Array then value.map { |item| wrap(item) }
       when String
-        key.to_s.end_with?("_at") && value.match?(ISO_TIME) ? Time.iso8601(value) : value
+        TIMESTAMPS.include?(key.to_s) && value.match?(ISO_TIME) ? Time.iso8601(value) : value
       else value
       end
     end

@@ -22,10 +22,10 @@ class PaginationTest < Minitest::Test
 
   def test_each_walks_every_page_keeping_the_parameters
     nohead, transport = client([page([record("rec_1"), record("rec_2")], "c2"), page([record("rec_3")], nil)])
-    ids = nohead.records.list("posts", filter: { status: "draft" }).map(&:id)
+    ids = nohead.records.list("posts", filter: { featured: true }).map(&:id)
     assert_equal %w[rec_1 rec_2 rec_3], ids
     assert_equal "c2", transport.requests[1].params["cursor"]
-    assert_equal "draft", transport.requests[1].params["filter[status]"]
+    assert_equal "true", transport.requests[1].params["filter[featured]"]
   end
 
   def test_stops_fetching_once_it_has_enough
@@ -51,7 +51,7 @@ class PaginationTest < Minitest::Test
 
   def test_search_totals
     nohead, transport = client([page([record("r")], nil, total_estimate: 1)])
-    hits = nohead.search("hello", collections: %w[posts pages], published: true)
+    hits = nohead.search("hello", collections: %w[posts pages], filter: { published_at: { exists: true } })
     assert_equal 1, hits.meta.total_estimate
     assert_equal "/v1/projects/prj_1/search", transport.requests.first.path
     assert_equal "posts,pages", transport.requests.first.params["filter[collection][in]"]

@@ -51,10 +51,9 @@ module Helpers
 
   def record(id, **data)
     {
-      id: id, object: "record", collection_id: "col_1", collection: "posts", status: "draft",
-      published_at: nil, schedule: { publish_at: nil, unpublish_at: nil, last_error: nil },
-      revision: 1, schema_version: 1, history_pruned_through: nil, deleted: false, data: data,
-      created_at: "2026-10-02T12:00:00.000Z", updated_at: "2026-10-02T12:00:00.000Z"
+      id: id, object: "record", collection_id: "col_1", collection: "posts", published_at: nil,
+      revision: 1, schema_version: 1, deleted_at: nil, purge_after: nil, history_pruned_through: nil,
+      data: data, created_at: "2026-10-02T12:00:00.000Z", updated_at: "2026-10-02T12:00:00.000Z"
     }
   end
 

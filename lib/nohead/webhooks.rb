@@ -10,7 +10,7 @@ module Nohead
   #                                   secret: ENV.fetch("NOHEAD_WEBHOOK_SECRET"))
   #   puts event.data.record.id if event.type == "record.published"
   #
-  # Event types are the activity log's actions (record.published,
+  # Event types are the same as the activity log's (record.published,
   # record.restored, field.updated, asset.purged, ...). While a secret
   # rotation overlaps, requests carry a signature for each secret, so either
   # one verifies.
@@ -77,11 +77,11 @@ module Nohead
 
       # Subscribes a URL. The response is the only time `secret` is shown.
       def create(idempotency_key: nil, **params)
-        @client.request("webhooks_create", body: params, idempotency_key: idempotency_key)
+        @client.request("webhooks_create", body: body_of(params), idempotency_key: idempotency_key)
       end
 
       def update(webhook, idempotency_key: nil, **params)
-        @client.request("webhooks_update", path: { webhook_id: webhook }, body: params,
+        @client.request("webhooks_update", path: { webhook_id: webhook }, body: body_of(params),
                                            idempotency_key: idempotency_key)
       end
 
