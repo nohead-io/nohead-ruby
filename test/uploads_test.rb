@@ -27,7 +27,7 @@ class UploadsTest < Minitest::Test
       nohead, transport = client([created, stored, ready], timeout: 9)
       assert_equal "ready", nohead.assets.upload(path).status
       assert_equal(["POST api.test/v1/projects/prj_1/assets", "PUT storage.test/uploads/prj_1/ast_1",
-                    "POST api.test/v1/assets/ast_1/completion"],
+                    "POST api.test/v1/assets/ast_1/complete"],
                    transport.requests.map { |request| "#{request.method} #{request.uri.host}#{request.path}" })
       assert_equal({ "filename" => "a.png", "content_type" => "image/png", "byte_size" => 3 },
                    transport.requests.first.json)
