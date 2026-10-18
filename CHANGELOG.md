@@ -7,6 +7,8 @@ section is its GitHub release's notes.
 
 ## 0.3.0
 
+- **Upgrade required:** 0.1 and 0.2 no longer work with the current API,
+  whose paths changed.
 - `change_note` is sent percent-encoded (UTF-8), so change notes work in any
   language: a note outside ASCII used to fail the request.
 - Drafts: changes to a record that wait until they are merged into it, now
@@ -22,22 +24,50 @@ section is its GitHub release's notes.
     when `published_at` is set, and has `deleted_at` and `purge_after`.
     Filter with `{ published_at: { exists: true } }`. `records.get` returns
     deleted records too (no `include_deleted`).
-  - `records.schedule` and `unschedule` return the schedule, and
-    `records.get_schedule`, `records.publication` and
-    `records.scheduled_changes` are new. `records.bulk` returns a record
-    batch.
-  - `search` takes `published: true` instead of `status: "published"`.
+  - `records.schedule` replaces the whole schedule: a time left out is
+    cleared, and `clear:` is gone. It and `unschedule` return the schedule,
+    and `records.get_schedule`, `records.publication` and
+    `records.scheduled_changes` are new. A scheduled change has no
+    `last_error`. `records.bulk` returns a record batch.
+  - `search` takes `filter:` as `records.list` does
+    (`filter: { published_at: { exists: true } }`) instead of
+    `status: "published"`.
+  - `records.diff(record, from:, to:)` and
+    `fields.reorder(collection, field_ids:)` take keywords.
+  - `audit_events.list` filters by `type` (was `action`), `resource_type`
+    (a type, or an Array of them), `resource_id`, `actor_type`, `actor_id`
+    and a `created_at` range (`{ gte: ..., lt: ... }`, was `since` and
+    `until`); the API refuses other filters. Events have `object: "event"`
+    and their name in `type`, and a field's events the resource type
+    `field`.
+  - `records.revisions.list` filters by a `created_at` range (was `since`
+    and `until`), and a revision's `operation` can be `merge` (no
+    `import`).
+  - Schema changes have no `status`.
   - Collections, fields, assets and webhooks have `deleted_at` and
     `purge_after` instead of `deleted`, and migrations
     `cancel_requested_at`.
   - `assets.create_upload` returns the asset with its `upload`.
   - `fields.reorder` returns the field order; `fields.order` reads it.
-  - Webhook event types are the activity log's actions (`record.restored`,
-    `field.updated`, ..., and wildcards such as `record.*`), and events carry
+  - Webhook event types are the same as the activity log's
+    (`record.restored`, `field.updated`, ..., and wildcards such as
+    `record.*`), and events carry
     `actor` and `via`. `webhooks.rotate_secret` returns the new webhook
     secret with its value; the old secret signs for 24 hours more.
     `webhooks.secrets.list`, `webhooks.secrets.retire`, `webhooks.restore`
-    and `webhooks.list(deleted: true)` are new.
+    and `webhooks.list(deleted: true)` are new. There is no
+    `record.imported` event; `field.*` events carry the `field_id`, and
+    schema events' `collection` its `object`.
+  - `if_match` and `change_note` go where the API takes them:
+    `records.restore` takes `if_match` and `records.revisions.revert`
+    `change_note`. Methods that take fields as keywords
+    (`webhooks.create`, `assets.create_upload`...) raise ArgumentError for
+    an `if_match` or `change_note` they don't take, instead of sending it
+    as a field.
+  - Timestamps are the ones the API declares, so `purge_after`, a
+    scheduled change's `at` and `health.check`'s `time` are Times too, and
+    a record field's value is no longer one because its name ends in
+    `_at`.
 - **Breaking:** the `datetime` field type is now `date`. A plain date field holds
   `YYYY-MM-DD`; with `include_time` it holds a moment, written in the field's
   `time_zone` when it has one. Field migrations take `time_zone`, the zone
@@ -55,8 +85,11 @@ section is its GitHub release's notes.
 - `assets.usage`: where an asset is used, as counts of the records that use
   it (and of those, the published ones) and the 10 most recently updated with
   the fields that use it. Needs the `records:read` scope too.
-- `assets.purge`: permanently deletes a deleted asset now, instead of 30
-  days after the delete, and frees its storage.
+- `assets.purge`: permanently deletes a deleted asset now, instead of at its
+  `purge_after`, and frees its storage.
+- `fields.get`.
+- `assets.upload` with an `idempotency_key` resumes: an asset that is
+  already `ready` comes back without sending the bytes again.
 - An error reads only the fields of the API's error envelope that have the
   right type, so JSON from a proxy or gateway that merely looks like one no
   longer gives it a non-string `message`, `type` or `request_id`, turns a
