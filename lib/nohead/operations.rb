@@ -4,7 +4,7 @@
 module Nohead
   # Every operation an API key can call: [method, path].
   OPERATIONS = {
-    "assets_complete" => ["POST", "/v1/assets/{asset_id}/completion"],
+    "assets_complete" => ["POST", "/v1/assets/{asset_id}/complete"],
     "assets_delete" => ["DELETE", "/v1/assets/{asset_id}"],
     "assets_download_url" => ["GET", "/v1/assets/{asset_id}/download-url"],
     "assets_get" => ["GET", "/v1/assets/{asset_id}"],
@@ -43,7 +43,7 @@ module Nohead
     "fields_update" => ["PATCH", "/v1/fields/{field_id}"],
     "health_check" => ["GET", "/v1/health"],
     "me_get" => ["GET", "/v1/me"],
-    "migrations_cancel" => ["POST", "/v1/migrations/{migration_id}/cancellation"],
+    "migrations_cancel" => ["POST", "/v1/migrations/{migration_id}/cancel"],
     "migrations_get" => ["GET", "/v1/migrations/{migration_id}"],
     "migrations_list" => ["GET", "/v1/collections/{collection_id}/migrations"],
     "projects_search" => ["GET", "/v1/projects/{project_id}/search"],
