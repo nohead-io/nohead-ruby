@@ -6,7 +6,9 @@
 # declared query parameter must be sent by some call. A new operation or query
 # parameter in openapi.json fails this test until a method takes it (and a
 # call in test/calls.rb or below passes it). Each call gets the contract's
-# example of its operation's response, and must return it.
+# examples of its operation's response, one per oneOf variant, and must return
+# them. Methods take `if_match` and `change_note` exactly where their
+# operations declare If-Match and Nohead-Change-Note.
 require_relative "test_helper"
 require_relative "calls"
 require "json_schemer"
@@ -50,9 +52,6 @@ class ContractTest < Minitest::Test
     result.is_a?(Nohead::Page) ? { "data" => result.data.map(&:to_h), "meta" => result.meta.to_h } : result.to_h
   end
 
-  # Query parameters an API key has no use for: it always acts on its own project.
-  NOT_FOR_API_KEYS = { "feature_flags_list" => %w[organization_id project_id] }.freeze
-
   # Calls that pass the query parameters the samples in test/calls.rb leave out.
   EVERY_PARAMETER = [
     ->(nohead) { nohead.records.list("posts", cursor: "cur_x") },
@@ -88,7 +87,7 @@ class ContractTest < Minitest::Test
     end
     assert_empty Nohead::OPERATIONS.keys - sent.keys, "operations without an SDK method"
     unsent = Spec::ROUTES.to_h do |route|
-      [route.id, route.query.map(&:name) - sent[route.id] - NOT_FOR_API_KEYS.fetch(route.id, [])]
+      [route.id, route.query.map(&:name) - sent[route.id]]
     end
     assert_empty unsent.reject { |_, params| params.empty? }, "query parameters no call sends"
   end
@@ -121,10 +120,70 @@ class ContractTest < Minitest::Test
     assert_equal Calls.example_reply(route, request), plain(result), "#{route.id} returns its response"
   end
 
-  def test_every_success_response_has_a_valid_example
+  def test_every_success_response_has_valid_examples
     Spec::ROUTES.each do |route|
       request = FakeTransport::Request.new(route.method, "https://api.test/", {}, nil)
       assert_empty errors(route.response.schema_at, Calls.example_reply(route, request)), route.id
+      Spec.examples(route.response.schema).each do |example|
+        assert_empty errors(route.response.schema_at, example), "#{route.id}: #{JSON.generate(example)}"
+      end
     end
+  end
+
+  # Each call returns every variant of its response, not only the first.
+  def test_every_variant_of_a_response_comes_back
+    Calls::EVERY_CALL.each do |call|
+      route = calls_route(call)
+      Spec.examples(route.response.schema).each do |example|
+        example = JSON.parse(JSON.generate(example))
+        reply = lambda do |request|
+          next Calls.reply(request) unless request.uri.host == "api.test" &&
+                                           Spec.route_of(request.method, request.path) == route
+
+          Nohead::Response.new(route.status, { "content-type" => "application/json" }, JSON.generate(example))
+        end
+        nohead, = client([reply])
+        assert_equal example, plain(call.call(nohead)), route.id
+      end
+    end
+  end
+
+  # The SDK options that send a header, by header.
+  HEADER_OPTIONS = { "If-Match" => :if_match, "Nohead-Change-Note" => :change_note }.freeze
+
+  def test_methods_take_the_headers_their_operations_declare
+    checked = Calls::EVERY_CALL.filter_map do |call|
+      nohead, transport = client([Calls.method(:reply)])
+      method = outermost_method { call.call(nohead) }
+      api = transport.requests.select { |request| request.uri.host == "api.test" }
+      next if api.size > 1 # a helper (assets.upload), made of methods checked on their own
+
+      route = Spec.route_of(api.first.method, api.first.path)
+      declared = HEADER_OPTIONS.filter_map { |header, option| option if route.headers.include?(header) }
+      taken = method.parameters.filter_map { |kind, name| name if %i[key keyreq].include?(kind) }
+      assert_equal declared.sort, (taken & HEADER_OPTIONS.values).sort, "#{method.owner}##{method.name} (#{route.id})"
+      route.id
+    end
+    assert_empty Nohead::OPERATIONS.keys - checked, "operations whose method is not checked"
+  end
+
+  # The operation the last request of a call is.
+  def calls_route(call)
+    nohead, transport = client([Calls.method(:reply)])
+    call.call(nohead)
+    request = transport.requests.reverse.find { |sent| sent.uri.host == "api.test" }
+    Spec.route_of(request.method, request.path)
+  end
+
+  # The SDK method a call calls (the first one it enters).
+  def outermost_method(&)
+    called = nil
+    trace = TracePoint.new(:call) do |point|
+      next if called || !(point.self.is_a?(Nohead::Resources::Resource) || point.self.is_a?(Nohead::Client))
+
+      called = point.self.method(point.method_id)
+    end
+    trace.enable(&)
+    called
   end
 end
