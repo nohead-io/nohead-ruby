@@ -15,7 +15,7 @@ root = File.expand_path("..", __dir__)
 spec = JSON.parse(File.read(File.join(root, "openapi.json"), encoding: "UTF-8"))
 methods = %w[get post put patch delete]
 
-api_key_operations = spec.fetch("paths").flat_map do |path, item|
+operations = spec.fetch("paths").flat_map do |path, item|
   methods.filter_map do |method|
     operation = item[method] or next
     security = operation.fetch("security", spec.fetch("security"))
@@ -61,7 +61,7 @@ end
 
 names = []
 seen = []
-api_key_operations.each { |operation| timestamps(spec, operation.last.fetch("responses"), names, seen) }
+operations.each { |operation| timestamps(spec, operation.last.fetch("responses"), names, seen) }
 timestamps(spec, spec.fetch("webhooks", {}), names, seen)
 
 # The objects whose `data` holds a record's field values (RecordData), found
@@ -75,7 +75,7 @@ record_data = spec.dig("components", "schemas").filter_map do |_, schema|
   props.dig("data", "$ref")&.end_with?("/RecordData") && props.dig("object", "const")
 end
 
-lines = api_key_operations.map do |id, method, path|
+lines = operations.map do |id, method, path|
   "    #{id.inspect} => [#{method.inspect}, #{path.inspect}]"
 end
 timestamp_lines = names.uniq.sort.each_slice(6).map { |slice| "    #{slice.join(' ')}" }
@@ -99,4 +99,4 @@ File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
     RECORD_DATA_OBJECTS = %w[#{record_data.sort.join(' ')}].to_set.freeze
   end
 RUBY
-puts "#{api_key_operations.size} operations, #{names.uniq.size} timestamp fields"
+puts "#{operations.size} operations, #{names.uniq.size} timestamp fields"
