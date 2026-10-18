@@ -5,6 +5,25 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
+## Unreleased
+
+- **Breaking:** field migrations are created under their collection:
+  `migrations.create(collection, field_id:, ..., dry_run: true)`
+  (`POST /v1/collections/{collection_id}/migrations`) replaces
+  `fields.migrate(field, ...)`. It returns a preview for a dry run, and the
+  FieldMigration otherwise.
+- **Breaking:** `drafts.list` no longer takes `record_id:`; a record's draft
+  is `records.drafts(record)`.
+- **Breaking:** `assets.list(content_type:)` takes one MIME type or `type/*`
+  wildcard (`"image/*"`), or an Array of them, sent as
+  `filter[content_type][in]` (an empty Array is any type). A
+  comma-separated string is no longer several types.
+- **Breaking:** `audit_events.list` sorts by `created_at` or `-created_at`
+  (the default; was `id` and `-id`), and `records.list` no longer sorts by
+  `id`.
+- Webhook events always carry `actor` and `via`, and `via` is no longer
+  `import` or `migration`.
+
 ## 0.4.0
 
 - **Breaking:** a field's `api_key` is its `key` (in fields, their aliases,

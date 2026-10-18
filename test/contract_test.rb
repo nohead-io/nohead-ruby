@@ -61,13 +61,12 @@ class ContractTest < Minitest::Test
     ->(nohead) { nohead.collections.list(limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.records.scheduled_changes("posts", sort: "-at", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.records.drafts("rec_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },
-    lambda { |nohead|
-      nohead.drafts.list("posts", record_id: "rec_01J9ZQ3F8X", sort: "updated_at", limit: 5, cursor: "cur_x")
-    },
+    ->(nohead) { nohead.drafts.list("posts", sort: "updated_at", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.collections.schema_changes.list("posts", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.fields.list("posts", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.migrations.list("posts", limit: 5, cursor: "cur_x") },
-    ->(nohead) { nohead.assets.list(content_type: ["image/*"], limit: 5, cursor: "cur_x") },
+    ->(nohead) { nohead.assets.list(content_type: "image/*", limit: 5, cursor: "cur_x") },
+    ->(nohead) { nohead.assets.list(content_type: %w[image/* application/pdf]) },
     ->(nohead) { nohead.assets.image_url("ast_01J9ZQ3F8X", height: 100, fit: "cover", quality: 80) },
     ->(nohead) { nohead.webhooks.list(limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.webhooks.deliveries.list("wh_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },

@@ -40,13 +40,15 @@ class PaginationTest < Minitest::Test
     assert_equal "saved", transport.requests.first.params["cursor"]
   end
 
-  def test_lists_drafts_by_record
-    nohead, transport = client([page([], nil), page([], nil)])
-    nohead.drafts.list("posts", record_id: "rec_1").data
-    nohead.drafts.list("posts", record_id: %w[rec_1 rec_2]).data
-    assert_equal "rec_1", transport.requests[0].params["filter[record_id]"]
-    assert_equal "rec_1,rec_2", transport.requests[1].params["filter[record_id][in]"]
-    assert_raises(ArgumentError) { nohead.drafts.list("posts", record_id: []) }
+  def test_lists_assets_by_content_type
+    nohead, transport = client([page([], nil), page([], nil), page([], nil)])
+    nohead.assets.list(content_type: "image/*").data
+    nohead.assets.list(content_type: %w[image/* application/pdf]).data
+    nohead.assets.list(content_type: []).data
+    assert_equal "image/*", transport.requests[0].params["filter[content_type]"]
+    assert_equal "image/*,application/pdf", transport.requests[1].params["filter[content_type][in]"]
+    # An empty list, like an asset field's accepted_types, is any type.
+    assert_empty transport.requests[2].params.keys.grep(/content_type/)
   end
 
   def test_search_totals

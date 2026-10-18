@@ -95,7 +95,7 @@ module Nohead
       end
 
       # Renames, describes or loosens a field. Changes that rewrite record
-      # values (type, multiple, tighter rules) are `migrate`.
+      # values (type, multiple, tighter rules) are `migrations.create`.
       def update(field, idempotency_key: nil, change_note: nil, **params)
         @client.request("fields_update", path: { field_id: field }, body: body_of(params),
                                          idempotency_key: idempotency_key, change_note: change_note)
@@ -125,23 +125,26 @@ module Nohead
                                           idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      # Stops accepting a renamed field's old API key before its 6 months end.
+      # Stops accepting a renamed field's old key before its 6 months end.
       def remove_alias(field, alias_key, idempotency_key: nil)
         @client.request("fields_remove_alias", path: { field_id: field, alias: alias_key },
                                                idempotency_key: idempotency_key)
-      end
-
-      # Starts a field migration (type, multiple, tighter configuration or a
-      # backfill) that rewrites every record. With dry_run: true, previews it.
-      def migrate(field, dry_run: false, idempotency_key: nil, change_note: nil, **params)
-        @client.request("fields_migrate", path: { field_id: field }, query: { dry_run: dry_run || nil },
-                                          body: body_of(params), idempotency_key: idempotency_key,
-                                          change_note: change_note)
       end
     end
 
     # Field migrations. While one runs, its collection is read-only.
     class Migrations < Resource
+      # Starts a migration of one of the collection's fields (`field_id`):
+      # its type, multiple, a tighter configuration or a backfill, which
+      # rewrites every record. Returns the FieldMigration, or with
+      # dry_run: true a preview (counts and sample records, nothing written).
+      def create(collection, field_id:, dry_run: false, idempotency_key: nil, change_note: nil, **params)
+        @client.request("migrations_create", path: { collection_id: collection },
+                                             query: { dry_run: dry_run || nil },
+                                             body: { field_id: field_id, **body_of(params) },
+                                             idempotency_key: idempotency_key, change_note: change_note)
+      end
+
       def list(collection, limit: nil, cursor: nil)
         @client.paginate("migrations_list", path: { collection_id: collection },
                                             query: { limit: limit, cursor: cursor })
