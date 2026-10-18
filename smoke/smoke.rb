@@ -86,6 +86,7 @@ begin
   asset = nohead.assets.upload(StringIO.new("hello"), filename: "hello.txt")
   left[:assets] = asset.id
   expect(asset.status == "ready" && asset.byte_size == 5, "assets upload to storage")
+  expect(nohead.assets.update(asset.id, filename: "greeting.txt").filename == "greeting.txt", "assets rename")
   expect(nohead.assets.delete(asset.id).deleted_at, "assets soft-delete")
   nohead.assets.purge(asset.id)
   left.delete(:assets)

@@ -7,6 +7,7 @@
   "assets_list": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nnohead.assets.list(deleted: true).each do |asset|\n  puts asset\nend\n",
   "assets_purge": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.purge(\"ast_01J9ZQ3F8X\")\n",
   "assets_restore": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.restore(\"ast_01J9ZQ3F8X\")\n",
+  "assets_update": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.update(\"ast_01J9ZQ3F8X\", filename: \"Spring menu.jpg\", alt: \"The spring menu, on a chalkboard\")\n",
   "assets_upload": "require \"nohead\"\nrequire \"stringio\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.upload(StringIO.new(\"Hello\"), filename: \"hello.txt\")\n",
   "assets_usage": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.usage(\"ast_01J9ZQ3F8X\")\n",
   "audit_events_list": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nnohead.audit_events.list(filter: { type: \"record.*\", resource_type: %w[record draft] }, sort: \"created_at\").each do |event|\n  puts event\nend\n",
