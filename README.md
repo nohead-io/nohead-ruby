@@ -229,8 +229,8 @@ Search needs `search_enabled` collections and the `search:read` scope. It pages 
 
 ```ruby
 nohead.collections.create(name: "Posts", slug: "posts",
-                          fields: [{ name: "Title", api_key: "title", type: "text", required: true }])
-nohead.fields.create("posts", name: "Summary", api_key: "summary", type: "long_text")
+                          fields: [{ name: "Title", key: "title", type: "text", required: true }])
+nohead.fields.create("posts", name: "Summary", key: "summary", type: "long_text")
 
 # Changes that rewrite records go through a migration; preview first
 preview = nohead.fields.migrate("fld_...", type: "long_text", dry_run: true)
