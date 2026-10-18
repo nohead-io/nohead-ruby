@@ -94,4 +94,7 @@ module Nohead
     purge_after rebuild_requested_at started_at succeeded_at time unpublish_at
     updated_at uploaded_at
   ].to_set.freeze
+
+  # The objects whose `data` is a record's field values.
+  RECORD_DATA_OBJECTS = %w[draft record record_revision revert_preview].to_set.freeze
 end

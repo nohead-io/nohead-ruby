@@ -12,7 +12,9 @@ module Nohead
       #
       # With an `idempotency_key`, running the same upload again resumes it:
       # the key starts the upload, and an asset that is already `ready` is
-      # returned without sending the bytes again.
+      # returned without sending the bytes again. Once the upload's URL has
+      # expired (`upload.expires_at`), it raises UploadError: start over with
+      # a new key.
       def upload(file, filename: nil, content_type: nil, byte_size: nil, idempotency_key: nil)
         source = UploadSource.new(file, filename: filename, content_type: content_type,
                                         byte_size: byte_size)
@@ -23,6 +25,10 @@ module Nohead
           if idempotency_key
             current = get(created.id)
             return current if current.status == "ready"
+            # The key replays the first run's upload URL, which expires sooner.
+            if created.upload.expires_at <= Time.now
+              raise UploadError, "The upload of #{source.filename} expired: start it again with a new idempotency_key"
+            end
           end
           upload = created.upload
           response = @client.put_upload(upload.url, upload["method"], upload.headers.to_h, source)

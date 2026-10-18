@@ -208,7 +208,7 @@ url = nohead.assets.image_url(asset.id, width: 1200, format: "webp").url
 
 **Errors:** `UploadError` if storage refuses the bytes; `ValidationError` if the file fails the checks.
 
-**Resuming:** with an `idempotency_key:`, running the same upload again resumes it: the key starts the upload, and an asset that is already `ready` comes back without sending the bytes again.
+**Resuming:** with an `idempotency_key:`, running the same upload again resumes it: the key starts the upload, and an asset that is already `ready` comes back without sending the bytes again. Once the upload's URL has expired (its `upload.expires_at`), it raises `UploadError`: start over with a new key.
 
 **Uploading from a browser:** create the upload on your server with `create_upload`, `PUT` the file from the browser, then `complete` it.
 
@@ -264,7 +264,7 @@ The API's resources come back as `Nohead::NoheadObject`s.
 
 - **Reading fields:** use methods (`record.data`) or `[]` (`record[:data]`, `record["data"]`), at any depth.
 - **Fields named like Ruby's own methods** (`method`, `hash`…) need `[]`.
-- **Timestamps** (the API's: `created_at`, `purge_after`, a scheduled change's `at`...) are `Time`s.
+- **Timestamps** (the API's: `created_at`, `purge_after`, a scheduled change's `at`...) are `Time`s. A record's field values (`record.data`) stay as they come.
 - **Unknown fields are kept**, because the API adds fields and values without notice.
 - **`to_h`** gives the raw Hash.
 

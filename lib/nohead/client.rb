@@ -57,7 +57,7 @@ module Nohead
     # `published_at` ({ published_at: { exists: true } } for published
     # records), as records.list does.
     def search(query, collections: nil, filter: nil, limit: nil, cursor: nil)
-      filter = { collection: (collections.nil? ? nil : { in: collections }), **filter.to_h }
+      filter = { collection: (collections.nil? ? nil : { in: collections }), **filter.to_h.transform_keys(&:to_sym) }
       paginate("projects_search", query: { q: query, filter: filter, limit: limit, cursor: cursor })
     end
 

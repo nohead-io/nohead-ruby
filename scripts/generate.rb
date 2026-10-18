@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # Writes lib/nohead/operations.rb from openapi.json: the method and path of
-# every operation an API key can call, and the names of the timestamp fields
-# in their responses and in webhook events. Session-only operations
+# every operation an API key can call, the names of the timestamp fields in
+# their responses and in webhook events, and the objects that hold record
+# field values. Session-only operations
 # (organizations, projects, members, API keys, billing) belong to the web app
 # and are left out.
 #
@@ -63,6 +64,17 @@ seen = []
 api_key_operations.each { |operation| timestamps(spec, operation.last.fetch("responses"), names, seen) }
 timestamps(spec, spec.fetch("webhooks", {}), names, seen)
 
+# The objects whose `data` holds a record's field values (RecordData), found
+# through allOf: their keys are field api_keys, not the API's timestamps.
+def properties(spec, schema)
+  schema = resolve(spec, schema)
+  (schema["allOf"] || []).map { |part| properties(spec, part) }.reduce(schema.fetch("properties", {}), :merge)
+end
+record_data = spec.dig("components", "schemas").filter_map do |_, schema|
+  props = properties(spec, schema)
+  props.dig("data", "$ref")&.end_with?("/RecordData") && props.dig("object", "const")
+end
+
 lines = api_key_operations.map do |id, method, path|
   "    #{id.inspect} => [#{method.inspect}, #{path.inspect}]"
 end
@@ -82,6 +94,9 @@ File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
     TIMESTAMPS = %w[
   #{timestamp_lines.join("\n")}
     ].to_set.freeze
+
+    # The objects whose `data` is a record's field values.
+    RECORD_DATA_OBJECTS = %w[#{record_data.sort.join(' ')}].to_set.freeze
   end
 RUBY
 puts "#{api_key_operations.size} operations, #{names.uniq.size} timestamp fields"

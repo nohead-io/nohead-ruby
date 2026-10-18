@@ -66,8 +66,8 @@ section is its GitHub release's notes.
     as a field.
   - Timestamps are the ones the API declares, so `purge_after`, a
     scheduled change's `at` and `health.check`'s `time` are Times too, and
-    a record field's value is no longer one because its name ends in
-    `_at`.
+    a record's field values are left as they come (a field whose name
+    ended in `_at` used to be a Time).
 - **Breaking:** the `datetime` field type is now `date`. A plain date field holds
   `YYYY-MM-DD`; with `include_time` it holds a moment, written in the field's
   `time_zone` when it has one. Field migrations take `time_zone`, the zone
@@ -89,7 +89,8 @@ section is its GitHub release's notes.
   `purge_after`, and frees its storage.
 - `fields.get`.
 - `assets.upload` with an `idempotency_key` resumes: an asset that is
-  already `ready` comes back without sending the bytes again.
+  already `ready` comes back without sending the bytes again, and one whose
+  upload URL expired raises `UploadError` (start over with a new key).
 - An error reads only the fields of the API's error envelope that have the
   right type, so JSON from a proxy or gateway that merely looks like one no
   longer gives it a non-string `message`, `type` or `request_id`, turns a

@@ -11,10 +11,10 @@ class UploadsTest < Minitest::Test
       status: status }
   end
 
-  def created
+  def created(expires_at: (Time.now + 900).utc.iso8601(3))
     json(201, asset("pending").merge(upload: { method: "PUT", url: "https://storage.test/uploads/prj_1/ast_1?signature=x",
                                                headers: { "Content-Type" => "image/png" },
-                                               expires_at: "2026-10-02T13:00:00.000Z" }))
+                                               expires_at: expires_at }))
   end
 
   def stored = Nohead::Response.new(200, {}, "")
@@ -57,6 +57,15 @@ class UploadsTest < Minitest::Test
     assert_equal "ready", nohead.assets.upload(StringIO.new("x"), idempotency_key: "k1").status
     assert_equal(["POST /v1/projects/prj_1/assets", "GET /v1/assets/ast_1"],
                  transport.requests.map { |request| "#{request.method} #{request.path}" })
+  end
+
+  def test_refuses_to_resume_once_the_upload_url_expired
+    nohead, transport = client([created(expires_at: "2026-10-02T13:00:00.000Z"), json(200, asset("pending"))])
+    error = assert_raises(Nohead::UploadError) do
+      nohead.assets.upload(StringIO.new("x"), idempotency_key: "k1")
+    end
+    assert_match(/new idempotency_key/, error.message)
+    assert_equal %w[POST GET], transport.requests.map(&:method)
   end
 
   def test_checks_for_a_finished_upload_only_with_an_idempotency_key

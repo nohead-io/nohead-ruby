@@ -7,27 +7,33 @@ module Nohead
   # (`record.data`) or with `[]` (`record["data"]`), nested objects included.
   # Fields named like Ruby's own methods (`method`, `hash`...) need `[]`.
   # Timestamps (the contract's: `created_at`, `purge_after`, `at`...) are
-  # Times. Unknown fields are kept: the API adds fields without notice.
+  # Times; a record's field values (`record.data`) are left as they come,
+  # but for the resources `expand` embeds in them. Unknown fields are kept:
+  # the API adds fields without notice.
   class NoheadObject
     ISO_TIME = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/
 
-    def self.wrap(value, key = nil)
+    # `fields`: the value is (in) a record's field values, whose keys are
+    # api_keys, so no timestamps.
+    def self.wrap(value, key = nil, fields: false)
       case value
-      when Hash then new(value)
-      when Array then value.map { |item| wrap(item) }
+      when Hash then new(value, fields: fields && !value.key?("object"))
+      when Array then value.map { |item| wrap(item, fields: fields) }
       when String
-        TIMESTAMPS.include?(key.to_s) && value.match?(ISO_TIME) ? Time.iso8601(value) : value
+        !fields && TIMESTAMPS.include?(key.to_s) && value.match?(ISO_TIME) ? Time.iso8601(value) : value
       else value
       end
     end
 
-    def initialize(values)
+    def initialize(values, fields: false)
       @values = values.to_h { |key, value| [key.to_s, value] }
+      @fields = fields
     end
 
     def [](key)
       key = key.to_s
-      self.class.wrap(@values[key], key)
+      fields = @fields || (key == "data" && RECORD_DATA_OBJECTS.include?(@values["object"]))
+      self.class.wrap(@values[key], key, fields: fields)
     end
 
     def key?(key) = @values.key?(key.to_s)
