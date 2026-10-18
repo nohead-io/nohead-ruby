@@ -125,7 +125,7 @@ module Nohead
                                           idempotency_key: idempotency_key, change_note: change_note)
       end
 
-      # Stops accepting a renamed field's old API key before its 6 months end.
+      # Stops accepting a renamed field's old key before its 6 months end.
       def remove_alias(field, alias_key, idempotency_key: nil)
         @client.request("fields_remove_alias", path: { field_id: field, alias: alias_key },
                                                idempotency_key: idempotency_key)

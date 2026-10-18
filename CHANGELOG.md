@@ -16,7 +16,7 @@ section is its GitHub release's notes.
   is `records.drafts(record)`.
 - **Breaking:** `assets.list(content_type:)` takes one MIME type or `type/*`
   wildcard (`"image/*"`), or an Array of them, sent as
-  `filter[content_type][in]` (an empty Array raises `ArgumentError`). A
+  `filter[content_type][in]` (an empty Array is any type). A
   comma-separated string is no longer several types.
 - **Breaking:** `audit_events.list` sorts by `created_at` or `-created_at`
   (the default; was `id` and `-id`), and `records.list` no longer sorts by

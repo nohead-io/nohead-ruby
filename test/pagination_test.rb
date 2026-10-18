@@ -41,12 +41,14 @@ class PaginationTest < Minitest::Test
   end
 
   def test_lists_assets_by_content_type
-    nohead, transport = client([page([], nil), page([], nil)])
+    nohead, transport = client([page([], nil), page([], nil), page([], nil)])
     nohead.assets.list(content_type: "image/*").data
     nohead.assets.list(content_type: %w[image/* application/pdf]).data
+    nohead.assets.list(content_type: []).data
     assert_equal "image/*", transport.requests[0].params["filter[content_type]"]
     assert_equal "image/*,application/pdf", transport.requests[1].params["filter[content_type][in]"]
-    assert_raises(ArgumentError) { nohead.assets.list(content_type: []) }
+    # An empty list, like an asset field's accepted_types, is any type.
+    assert_empty transport.requests[2].params.keys.grep(/content_type/)
   end
 
   def test_search_totals
