@@ -112,9 +112,10 @@ class RequestsTest < Minitest::Test
 
   def test_dry_runs_are_query_parameters
     nohead, transport = client([json(200, {})])
-    nohead.fields.migrate("fld_1", type: "integer", dry_run: true)
+    nohead.migrations.create("posts", field_id: "fld_1", type: "integer", dry_run: true)
+    assert_equal "/v1/collections/posts/migrations", transport.requests.first.path
     assert_equal "true", transport.requests.first.params["dry_run"]
-    assert_equal({ "type" => "integer" }, transport.requests.first.json)
+    assert_equal({ "field_id" => "fld_1", "type" => "integer" }, transport.requests.first.json)
   end
 
   def test_diff_names_its_revisions

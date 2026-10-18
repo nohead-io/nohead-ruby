@@ -10,6 +10,8 @@ module Nohead
       #
       #   audit_events.list(filter: { type: "record.*", resource_type: %w[record draft],
       #                               created_at: { gte: Time.utc(2026, 10, 1) } })
+      #
+      # `sort` is "-created_at" (the default) or "created_at".
       def list(filter: nil, sort: nil, limit: nil, cursor: nil)
         filter = filter&.transform_keys(&:to_sym)
         types = filter&.[](:resource_type)

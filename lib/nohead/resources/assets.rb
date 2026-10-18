@@ -54,10 +54,14 @@ module Nohead
         @client.request("assets_complete", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end
 
-      # `content_type` lists only assets of those MIME types or `type/*`
-      # wildcards (["image/*", "application/pdf"]), for example the ones an
-      # asset field accepts (its `accepted_types`).
+      # `content_type` lists only assets of a MIME type or `type/*` wildcard
+      # ("image/*"), or of several (["image/*", "application/pdf"], up to 50;
+      # an empty Array raises ArgumentError, since it would match no asset),
+      # for example the ones an asset field accepts (its `accepted_types`).
       def list(content_type: nil, deleted: nil, limit: nil, cursor: nil)
+        raise ArgumentError, "content_type needs at least one type" if content_type == []
+
+        content_type = { in: content_type } if content_type.is_a?(Array)
         @client.paginate("assets_list", query: { filter: { content_type: content_type, deleted: deleted },
                                                  limit: limit, cursor: cursor })
       end

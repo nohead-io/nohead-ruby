@@ -13,6 +13,7 @@ class WebhooksTest < Minitest::Test
   def body
     JSON.generate(id: "wev_1", object: "event", type: "record.published",
                   created_at: "2026-10-02T12:00:00.000Z", project_id: "prj_1",
+                  actor: { type: "api_key", id: "key_1", name: "Importer" }, via: "sdk",
                   data: { record: record("rec_1", title: "Hi"), revision: 2, revision_id: "rev_1" })
   end
 
@@ -44,6 +45,8 @@ class WebhooksTest < Minitest::Test
   def test_returns_the_event
     event = Nohead::Webhooks.unwrap(body, sign(body), secret: SECRET)
     assert_equal "record.published", event.type
+    assert_equal "key_1", event.actor.id
+    assert_equal "sdk", event.via
     assert_equal 2, event.data.revision
     assert_equal "Hi", event.data.record.data["title"]
   end
