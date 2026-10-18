@@ -148,6 +148,10 @@ module Nohead
 
     def build_url(template, values)
       values = values.transform_keys(&:to_s)
+      # A value the template doesn't take is a method out of step with its operation.
+      unknown = values.keys - template.scan(/\{(\w+)\}/).flatten
+      raise ArgumentError, "#{unknown.join(', ')} is not a path parameter of #{template}" if unknown.any?
+
       values["project_id"] ||= project_id if template.include?("{project_id}")
       path = template.gsub(/\{(\w+)\}/) do
         value = values[Regexp.last_match(1)]
