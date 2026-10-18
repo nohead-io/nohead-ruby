@@ -12,8 +12,8 @@ module Spec
   Parameter = Struct.new(:name, :schema, :schema_at)
   Body = Struct.new(:schema, :schema_at)
   # `body` is nil for operations without one; `status` and `response` are the
-  # first success response's.
-  Route = Struct.new(:id, :method, :pattern, :query, :body, :body_required, :status, :response) # rubocop:disable Lint/StructNewOverride
+  # first success response's; `headers` are the names of the header parameters.
+  Route = Struct.new(:id, :method, :pattern, :query, :headers, :body, :body_required, :status, :response) # rubocop:disable Lint/StructNewOverride
 
   # A JSON pointer into the contract.
   def self.pointer(*parts) = "#/#{parts.map { |part| part.gsub('~', '~0').gsub('/', '~1') }.join('/')}"
@@ -27,10 +27,11 @@ module Spec
     value.is_a?(Hash) && value["$ref"] ? at(value["$ref"]) : [path, value]
   end
 
-  def self.query(owner, path)
+  # The parameters of a path item or operation that are `place` ("query", "header").
+  def self.parameters(owner, path, place)
     owner.fetch("parameters", []).each_index.filter_map do |index|
       where, parameter = at("#{path}/parameters/#{index}")
-      Parameter.new(parameter["name"], parameter["schema"], "#{where}/schema") if parameter["in"] == "query"
+      Parameter.new(parameter["name"], parameter["schema"], "#{where}/schema") if parameter["in"] == place
     end
   end
 
@@ -44,8 +45,9 @@ module Spec
     operation = item[method.downcase]
     operation_at = pointer("paths", path, method.downcase)
     status = operation["responses"].keys.find { |code| code.start_with?("2") }
+    place = ->(name) { parameters(item, pointer("paths", path), name) + parameters(operation, operation_at, name) }
     Route.new(id, method, Regexp.new("\\A#{path.gsub(/\{\w+\}/, '[^/]+')}\\z"),
-              query(item, pointer("paths", path)) + query(operation, operation_at),
+              place.call("query"), place.call("header").map(&:name),
               operation["requestBody"] && json("#{operation_at}/requestBody"),
               operation.dig("requestBody", "required") == true, Integer(status),
               json("#{operation_at}/responses/#{status}"))
@@ -60,29 +62,53 @@ module Spec
 
   # A value that matches `schema`: its example, constant, first enum value or
   # default, else one built from its type, with every property (the first
-  # non-null type, the first of oneOf and anyOf).
-  def self.example(schema)
-    return example(at(schema["$ref"]).last) if schema["$ref"]
+  # non-null type). Of a oneOf or anyOf, the variant `picks` names for it (by
+  # the list of variants, compared by identity), else the first.
+  def self.example(schema, picks = {})
+    return example(at(schema["$ref"]).last, picks) if schema["$ref"]
     return schema["examples"].first if schema["examples"]
     return schema["const"] if schema.key?("const")
     return schema["enum"].first if schema["enum"]
     return schema["default"] if schema.key?("default")
-    return schema["allOf"].map { |part| example(part) }.reduce({}, :merge) if schema["allOf"]
-    return example((schema["oneOf"] || schema["anyOf"]).first) if schema["oneOf"] || schema["anyOf"]
+    return schema["allOf"].map { |part| example(part, picks) }.reduce({}, :merge) if schema["allOf"]
+    if (variants = schema["oneOf"] || schema["anyOf"])
+      return example(variants[picks.fetch(variants, 0)], picks)
+    end
 
-    example_of_type(schema)
+    example_of_type(schema, picks)
   end
 
-  def self.example_of_type(schema)
+  def self.example_of_type(schema, picks)
     types = Array(schema["type"])
     case types.find { |type| type != "null" } || types.first
-    when "object" then schema.fetch("properties", {}).transform_values { |property| example(property) }
-    when "array" then Array.new([schema.fetch("minItems", 1), 1].max) { example(schema.fetch("items", {})) }
+    when "object" then schema.fetch("properties", {}).transform_values { |property| example(property, picks) }
+    when "array"
+      Array.new([schema.fetch("minItems", 1), 1].max) { example(schema.fetch("items", {}), picks) }
     when "string" then STRINGS.fetch(schema["format"], "string")
     when "integer", "number" then schema.fetch("minimum", 1)
     when "boolean" then false
     when "null" then nil
     else {}
     end
+  end
+
+  # Examples of `schema` that between them have every variant of each oneOf
+  # and anyOf in it, not only the first.
+  def self.examples(schema)
+    choices(schema, {}.compare_by_identity).map { |picks| example(schema, picks) }.uniq
+  end
+
+  # The picks (as `example` takes them) that reach each variant once, the way
+  # `example` walks the schema.
+  def self.choices(schema, picks)
+    return choices(at(schema["$ref"]).last, picks) if schema["$ref"]
+    return [picks] if schema["examples"] || %w[const enum default].any? { |key| schema.key?(key) }
+
+    if (variants = schema["oneOf"] || schema["anyOf"])
+      return variants.each_index.flat_map { |index| choices(variants[index], picks.merge(variants => index)) }
+    end
+
+    parts = [*schema["allOf"], *schema.fetch("properties", {}).values, schema["items"]].compact
+    [picks, *parts.flat_map { |part| choices(part, picks) }].uniq
   end
 end

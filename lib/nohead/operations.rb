@@ -14,7 +14,7 @@ module Nohead
     "assets_restore" => ["POST", "/v1/assets/{asset_id}/restore"],
     "assets_upload" => ["POST", "/v1/projects/{project_id}/assets"],
     "assets_usage" => ["GET", "/v1/assets/{asset_id}/usage"],
-    "audit_events_list_for_project" => ["GET", "/v1/projects/{project_id}/audit-events"],
+    "audit_events_list" => ["GET", "/v1/projects/{project_id}/audit-events"],
     "collections_create" => ["POST", "/v1/projects/{project_id}/collections"],
     "collections_delete" => ["DELETE", "/v1/collections/{collection_id}"],
     "collections_get" => ["GET", "/v1/collections/{collection_id}"],
@@ -34,6 +34,7 @@ module Nohead
     "feature_flags_list" => ["GET", "/v1/feature-flags"],
     "fields_create" => ["POST", "/v1/collections/{collection_id}/fields"],
     "fields_delete" => ["DELETE", "/v1/fields/{field_id}"],
+    "fields_get" => ["GET", "/v1/fields/{field_id}"],
     "fields_get_order" => ["GET", "/v1/collections/{collection_id}/field-order"],
     "fields_list" => ["GET", "/v1/collections/{collection_id}/fields"],
     "fields_migrate" => ["POST", "/v1/fields/{field_id}/migrations"],
@@ -73,7 +74,7 @@ module Nohead
     "search_index_rebuild" => ["POST", "/v1/collections/{collection_id}/search-index/rebuild"],
     "webhook_deliveries_get" => ["GET", "/v1/webhook-deliveries/{delivery_id}"],
     "webhook_deliveries_list" => ["GET", "/v1/webhooks/{webhook_id}/deliveries"],
-    "webhook_deliveries_retry" => ["POST", "/v1/webhook-deliveries/{delivery_id}/attempts"],
+    "webhook_deliveries_retry" => ["POST", "/v1/webhook-deliveries/{delivery_id}/retry"],
     "webhook_secrets_list" => ["GET", "/v1/webhooks/{webhook_id}/secrets"],
     "webhook_secrets_retire" => ["DELETE", "/v1/webhook-secrets/{secret_id}"],
     "webhooks_create" => ["POST", "/v1/projects/{project_id}/webhooks"],
@@ -85,4 +86,15 @@ module Nohead
     "webhooks_test" => ["POST", "/v1/webhooks/{webhook_id}/test"],
     "webhooks_update" => ["PATCH", "/v1/webhooks/{webhook_id}"]
   }.freeze
+
+  # The names of the timestamp fields in responses and webhook events.
+  TIMESTAMPS = %w[
+    at cancel_requested_at completed_at created_at deleted_at expires_at
+    last_attempt_at last_built_at merge_at next_attempt_at publish_at published_at
+    purge_after rebuild_requested_at started_at succeeded_at time unpublish_at
+    updated_at uploaded_at
+  ].to_set.freeze
+
+  # The objects whose `data` is a record's field values.
+  RECORD_DATA_OBJECTS = %w[draft record record_revision revert_preview].to_set.freeze
 end

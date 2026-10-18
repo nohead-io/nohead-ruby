@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 # Writes lib/nohead/operations.rb from openapi.json: the method and path of
-# every operation an API key can call. Session-only operations (organizations,
-# projects, members, API keys, billing) belong to the web app and are left out.
+# every operation an API key can call, the names of the timestamp fields in
+# their responses and in webhook events, and the objects that hold record
+# field values. Session-only operations
+# (organizations, projects, members, API keys, billing) belong to the web app
+# and are left out.
 #
 #   rake generate
 
@@ -18,13 +21,64 @@ operations = spec.fetch("paths").flat_map do |path, item|
     security = operation.fetch("security", spec.fetch("security"))
     next unless security.empty? || security.any? { |s| s.key?("apiKey") }
 
-    [operation.fetch("operationId"), method.upcase, path]
+    [operation.fetch("operationId"), method.upcase, path, operation]
   end
-end.sort
+end.sort_by(&:first)
+
+def resolve(spec, node)
+  node.is_a?(Hash) && node["$ref"] ? spec.dig(*node["$ref"].delete_prefix("#/").split("/")) : node
+end
+
+# A timestamp is a Timestamp or NullableTimestamp, or a date-time string,
+# alone or as one of a property's oneOf or anyOf.
+def timestamp?(spec, property)
+  return true if property["$ref"].to_s.match?(%r{/(Nullable)?Timestamp\z})
+
+  property = resolve(spec, property)
+  return true if property["format"] == "date-time"
+
+  (property["oneOf"] || property["anyOf"] || []).any? { |variant| timestamp?(spec, variant) }
+end
+
+# The names of the timestamp properties of every schema reachable from
+# `node`, following $refs once each.
+def timestamps(spec, node, names, seen)
+  case node
+  when Array then node.each { |item| timestamps(spec, item, names, seen) }
+  when Hash
+    if (ref = node["$ref"])
+      return if seen.include?(ref)
+
+      seen << ref
+      return timestamps(spec, resolve(spec, node), names, seen)
+    end
+    node.fetch("properties", {}).each do |name, property|
+      names << name if property.is_a?(Hash) && timestamp?(spec, property)
+    end
+    node.each_value { |value| timestamps(spec, value, names, seen) }
+  end
+end
+
+names = []
+seen = []
+operations.each { |operation| timestamps(spec, operation.last.fetch("responses"), names, seen) }
+timestamps(spec, spec.fetch("webhooks", {}), names, seen)
+
+# The objects whose `data` holds a record's field values (RecordData), found
+# through allOf: their keys are field api_keys, not the API's timestamps.
+def properties(spec, schema)
+  schema = resolve(spec, schema)
+  (schema["allOf"] || []).map { |part| properties(spec, part) }.reduce(schema.fetch("properties", {}), :merge)
+end
+record_data = spec.dig("components", "schemas").filter_map do |_, schema|
+  props = properties(spec, schema)
+  props.dig("data", "$ref")&.end_with?("/RecordData") && props.dig("object", "const")
+end
 
 lines = operations.map do |id, method, path|
   "    #{id.inspect} => [#{method.inspect}, #{path.inspect}]"
 end
+timestamp_lines = names.uniq.sort.each_slice(6).map { |slice| "    #{slice.join(' ')}" }
 
 File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
   # frozen_string_literal: true
@@ -35,6 +89,14 @@ File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
     OPERATIONS = {
   #{lines.join(",\n")}
     }.freeze
+
+    # The names of the timestamp fields in responses and webhook events.
+    TIMESTAMPS = %w[
+  #{timestamp_lines.join("\n")}
+    ].to_set.freeze
+
+    # The objects whose `data` is a record's field values.
+    RECORD_DATA_OBJECTS = %w[#{record_data.sort.join(' ')}].to_set.freeze
   end
 RUBY
-puts "#{operations.size} operations"
+puts "#{operations.size} operations, #{names.uniq.size} timestamp fields"

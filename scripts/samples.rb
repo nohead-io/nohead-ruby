@@ -2,8 +2,8 @@
 
 # Writes samples.json: for each API-key operation, a Ruby code sample that
 # calls it, from the calls in test/calls.rb (which the contract test checks
-# against the contract). The Nohead API repository puts them in the docs
-# site's API reference (x-codeSamples).
+# against the contract). The docs repository's daily samples workflow pulls
+# them into the API reference (x-codeSamples).
 #
 #   rake samples
 

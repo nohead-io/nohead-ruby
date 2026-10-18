@@ -19,6 +19,7 @@ end
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Records](#records)
+- [Drafts](#drafts)
 - [Pagination](#pagination)
 - [Errors](#errors)
 - [Retries and idempotency](#retries-and-idempotency)
@@ -69,7 +70,7 @@ post = nohead.records.get(created.id, expand: ["author"])
 nohead.records.update(post.id, data: { title: "Hello again" }) # nil clears a field
 nohead.records.publish(post.id)
 nohead.records.publication(post.id) # since when, by whom, which revision
-nohead.records.schedule(post.id, unpublish_at: Time.utc(2027, 1, 1))
+nohead.records.schedule(post.id, unpublish_at: Time.utc(2027, 1, 1)) # the whole schedule: a time left out is cleared
 nohead.records.delete(post.id) # soft delete; records.restore undoes it
 ```
 
@@ -78,8 +79,8 @@ Methods return the API's resources (see [Results](#results)) and raise on failur
 **More:**
 
 - `count`, and `bulk` (up to 100 records at once)
-- `diff(record, from_revision, to_revision)`
-- `revisions.list`, `revisions.get` and `revisions.revert` (with `dry_run: true` for a preview)
+- `diff(record, from: 1, to: 2)`
+- `revisions.list` (`filter:` `operation`, `actor_id` and a `created_at` range such as `{ gte: Time.utc(2026, 10, 1) }`), `revisions.get` and `revisions.revert` (with `dry_run: true` for a preview)
 
 ## Drafts
 
@@ -171,7 +172,7 @@ Every write gets an `Idempotency-Key` that stays the same across its retries, so
 nohead.records.create("posts", data: data, idempotency_key: "import-#{row.id}")
 ```
 
-Writes also take `change_note:`, a reason shown in history.
+Writes that change records or the schema also take `change_note:`, a reason shown in history.
 
 ## Concurrency
 
@@ -186,7 +187,7 @@ rescue Nohead::PreconditionFailedError => e
 end
 ```
 
-`if_match:` takes a record or a revision number, on `update`, `delete`, `publish`, `unpublish` and `revisions.revert`.
+`if_match:` takes a record (or draft) or a revision number, on `records.update`, `delete`, `restore`, `publish`, `unpublish` and `revisions.revert`, and on `drafts.update`, `discard` and `merge`.
 
 ## Assets
 
@@ -207,6 +208,8 @@ url = nohead.assets.image_url(asset.id, width: 1200, format: "webp").url
 
 **Errors:** `UploadError` if storage refuses the bytes; `ValidationError` if the file fails the checks.
 
+**Resuming:** with an `idempotency_key:`, running the same upload again resumes it: the key starts the upload, and an asset that is already `ready` comes back without sending the bytes again. Once the upload's URL has expired (its `upload.expires_at`), it raises `UploadError`: start over with a new key.
+
 **Uploading from a browser:** create the upload on your server with `create_upload`, `PUT` the file from the browser, then `complete` it.
 
 ## Search
@@ -216,7 +219,7 @@ url = nohead.assets.image_url(asset.id, width: 1200, format: "webp").url
 nohead.records.search("posts", "content model").each { |hit| ... }
 
 # Across the project
-results = nohead.search("content model", collections: %w[posts pages], published: true)
+results = nohead.search("content model", collections: %w[posts pages], filter: { published_at: { exists: true } })
 results.meta.total_estimate
 ```
 
@@ -251,7 +254,7 @@ end
 head :no_content
 ```
 
-Event types are the activity log's actions (`record.published`, `record.restored`, `field.updated`, `asset.purged`, ...), and a webhook subscribes to types or wildcards (`record.*`, `*`). `event.actor` says who made the change, and `event.via` through which client. `unwrap` checks the signature and the timestamp (Standard Webhooks), and raises `Nohead::WebhookVerificationError` if either is off. After `rotate_secret`, requests carry a signature for the old secret and the new one for 24 hours, so switch the receiver's secret within that day (or end it sooner with `webhooks.secrets.retire`). Pass the raw body: parsing and re-serializing JSON changes the bytes.
+Event types are the same as the activity log's (`record.published`, `record.restored`, `field.updated`, `asset.purged`, ...), and a webhook subscribes to types or wildcards (`record.*`, `*`). `event.actor` says who made the change, and `event.via` through which client. `unwrap` checks the signature and the timestamp (Standard Webhooks), and raises `Nohead::WebhookVerificationError` if either is off. After `rotate_secret`, requests carry a signature for the old secret and the new one for 24 hours, so switch the receiver's secret within that day (or end it sooner with `webhooks.secrets.retire`). Pass the raw body: parsing and re-serializing JSON changes the bytes.
 
 It's also available as `nohead.webhooks.unwrap` on a client. Events can arrive more than once, so deduplicate by the `webhook-id` header.
 
@@ -261,7 +264,7 @@ The API's resources come back as `Nohead::NoheadObject`s.
 
 - **Reading fields:** use methods (`record.data`) or `[]` (`record[:data]`, `record["data"]`), at any depth.
 - **Fields named like Ruby's own methods** (`method`, `hash`…) need `[]`.
-- **Timestamps** (`*_at`) are `Time`s.
+- **Timestamps** (the API's: `created_at`, `purge_after`, a scheduled change's `at`...) are `Time`s. A record's field values (`record.data`) stay as they come.
 - **Unknown fields are kept**, because the API adds fields and values without notice.
 - **`to_h`** gives the raw Hash.
 
@@ -276,7 +279,7 @@ The API's resources come back as `Nohead::NoheadObject`s.
 | `collections` | `list`, `get`, `create`, `update`, `delete`, `restore`, `schema` |
 | `collections.schema_changes` | `list`, `get` |
 | `collections.search_index` | `get`, `rebuild` |
-| `fields` | `list`, `create`, `update`, `delete`, `restore`, `order`, `reorder`, `remove_alias`, `migrate` |
+| `fields` | `list`, `get`, `create`, `update`, `delete`, `restore`, `order`, `reorder`, `remove_alias`, `migrate` |
 | `migrations` | `list`, `get`, `cancel` |
 | `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `delete`, `restore`, `purge`, `usage`, `image_url`, `download_url` |
 | `webhooks` | `list`, `get`, `create`, `update`, `delete`, `restore`, `rotate_secret`, `test`, `unwrap` |

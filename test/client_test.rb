@@ -78,8 +78,35 @@ class ClientTest < Minitest::Test
     assert_equal "Hi", post[:data][:title]
     assert_equal 1, post.brand_new
     assert_equal Time.utc(2026, 10, 2, 12), post.created_at
-    assert_nil post.schedule.publish_at
+    assert_nil post.published_at
     assert_respond_to post, :revision
     refute_respond_to post, :nothing_like_it
+  end
+
+  def test_timestamps_are_times
+    nohead, = client([json(200, record("rec_1").merge(deleted_at: "2026-10-03T12:00:00.000Z",
+                                                      purge_after: "2026-11-02T12:00:00.000Z"))])
+    post = nohead.records.get("rec_1")
+    assert_equal Time.utc(2026, 10, 3, 12), post.deleted_at
+    assert_equal Time.utc(2026, 11, 2, 12), post.purge_after
+    assert_equal "2026-10-02T12:00:00.000Z", post.to_h["created_at"]
+
+    nohead, = client([json(200, { status: "ok", version: "v1", time: "2026-10-02T12:00:00Z" })])
+    assert_equal Time.utc(2026, 10, 2, 12), nohead.health.check.time
+    change = Nohead::NoheadObject.wrap({ "object" => "scheduled_change", "at" => "2027-01-01T09:00:00Z" })
+    assert_equal Time.utc(2027, 1, 1, 9), change.at
+  end
+
+  # A field's value, even one named like the API's timestamps, stays as it
+  # comes; the resources expanded in it have their timestamps.
+  def test_field_values_stay_as_they_come
+    moment = "2026-10-02T12:00:00.000Z"
+    author = record("rec_2", published_at: moment)
+    nohead, = client([json(200, record("rec_1", launch_at: moment, published_at: moment,
+                                                links: [{ at: moment }], author: author))])
+    post = nohead.records.get("rec_1")
+    assert_equal [moment] * 3, [post.data["launch_at"], post.data.published_at, post.data.links.first.at]
+    assert_equal Time.utc(2026, 10, 2, 12), post.data.author.created_at
+    assert_equal moment, post.data.author.data.published_at
   end
 end

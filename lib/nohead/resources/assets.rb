@@ -9,12 +9,27 @@ module Nohead
       # file). `file` is a path or an IO; for bytes, pass StringIO.new(bytes).
       # Raises UploadError if storage refuses the bytes, and ValidationError if
       # the file fails the checks.
+      #
+      # With an `idempotency_key`, running the same upload again resumes it:
+      # the key starts the upload, and an asset that is already `ready` is
+      # returned without sending the bytes again. Once the upload's URL has
+      # expired (`upload.expires_at`), it raises UploadError: start over with
+      # a new key.
       def upload(file, filename: nil, content_type: nil, byte_size: nil, idempotency_key: nil)
         source = UploadSource.new(file, filename: filename, content_type: content_type,
                                         byte_size: byte_size)
         begin
           created = create_upload(filename: source.filename, content_type: source.content_type,
                                   byte_size: source.byte_size, idempotency_key: idempotency_key)
+          # A replayed start returns the first run's asset, which may be done.
+          if idempotency_key
+            current = get(created.id)
+            return current if current.status == "ready"
+            # The key replays the first run's upload URL, which expires sooner.
+            if created.upload.expires_at <= Time.now
+              raise UploadError, "The upload of #{source.filename} expired: start it again with a new idempotency_key"
+            end
+          end
           upload = created.upload
           response = @client.put_upload(upload.url, upload["method"], upload.headers.to_h, source)
         ensure
@@ -31,7 +46,7 @@ module Nohead
       # presigned URL to PUT the bytes to (for example from a browser). Then
       # `complete` it.
       def create_upload(idempotency_key: nil, **params)
-        @client.request("assets_upload", body: params, idempotency_key: idempotency_key)
+        @client.request("assets_upload", body: body_of(params), idempotency_key: idempotency_key)
       end
 
       # Checks an uploaded file and marks the asset `ready`.
@@ -51,7 +66,8 @@ module Nohead
         @client.request("assets_get", path: { asset_id: asset })
       end
 
-      # Soft-deletes the asset; the file is purged at its `purge_after` (30 days).
+      # Soft-deletes the asset: restore brings it back until its `purge_after`,
+      # when the file is purged.
       def delete(asset, idempotency_key: nil)
         @client.request("assets_delete", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end

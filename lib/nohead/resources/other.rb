@@ -4,10 +4,17 @@ module Nohead
   module Resources
     # The project's activity log, newest first. Needs the audit:read scope.
     class AuditEvents < Resource
-      # `filter` takes action (exact, or a "record.*" prefix), resource_type,
-      # resource_id, actor_type, actor_id, since and until.
+      # `filter` takes `type` (exact, or a "record.*" prefix), `resource_type`
+      # (a type, or an Array of them), `resource_id`, `actor_type`, `actor_id`
+      # and a `created_at` range:
+      #
+      #   audit_events.list(filter: { type: "record.*", resource_type: %w[record draft],
+      #                               created_at: { gte: Time.utc(2026, 10, 1) } })
       def list(filter: nil, sort: nil, limit: nil, cursor: nil)
-        @client.paginate("audit_events_list_for_project",
+        filter = filter&.transform_keys(&:to_sym)
+        types = filter&.[](:resource_type)
+        filter = filter.merge(resource_type: { in: types }) if types.is_a?(Array)
+        @client.paginate("audit_events_list",
                          query: { filter: filter, sort: sort, limit: limit, cursor: cursor })
       end
     end
