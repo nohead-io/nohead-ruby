@@ -212,6 +212,12 @@ url = nohead.assets.image_url(asset.id, width: 1200, format: "webp").url
 
 **Uploading from a browser:** create the upload on your server with `create_upload`, `PUT` the file from the browser, then `complete` it.
 
+**Renaming and alt text:** `update` changes an asset's `filename:` and `alt:` text, the default wherever the asset is used (`expand:` returns it with the asset). The file itself never changes.
+
+```ruby
+nohead.assets.update(asset.id, alt: "The spring menu, on a chalkboard")
+```
+
 ## Search
 
 ```ruby
@@ -281,7 +287,7 @@ The API's resources come back as `Nohead::NoheadObject`s.
 | `collections.search_index` | `get`, `rebuild` |
 | `fields` | `list`, `get`, `create`, `update`, `delete`, `restore`, `order`, `reorder`, `remove_alias` |
 | `migrations` | `create`, `list`, `get`, `cancel` |
-| `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `delete`, `restore`, `purge`, `usage`, `image_url`, `download_url` |
+| `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `update`, `delete`, `restore`, `purge`, `usage`, `image_url`, `download_url` |
 | `webhooks` | `list`, `get`, `create`, `update`, `delete`, `restore`, `rotate_secret`, `test`, `unwrap` |
 | `webhooks.secrets` | `list`, `retire` |
 | `webhooks.deliveries` | `list`, `get`, `retry` |

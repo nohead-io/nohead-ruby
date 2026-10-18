@@ -68,6 +68,15 @@ module Nohead
         @client.request("assets_get", path: { asset_id: asset })
       end
 
+      # Renames the asset (`filename:`) or sets its `alt:` text (nil or ""
+      # clears it). The file itself can't change: upload a new asset for that.
+      # `alt` is the default wherever the asset is used. A deleted asset is a
+      # ConflictError: restore it first.
+      def update(asset, idempotency_key: nil, **params)
+        @client.request("assets_update", path: { asset_id: asset }, body: body_of(params),
+                                         idempotency_key: idempotency_key)
+      end
+
       # Soft-deletes the asset: restore brings it back until its `purge_after`,
       # when the file is purged.
       def delete(asset, idempotency_key: nil)
