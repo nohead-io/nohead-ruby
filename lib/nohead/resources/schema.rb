@@ -60,9 +60,8 @@ module Nohead
                                                 query: { limit: limit, cursor: cursor })
       end
 
-      def get(collection, schema_change)
-        @client.request("schema_changes_get",
-                        path: { collection_id: collection, schema_change_id: schema_change })
+      def get(schema_change)
+        @client.request("schema_changes_get", path: { schema_change_id: schema_change })
       end
     end
 

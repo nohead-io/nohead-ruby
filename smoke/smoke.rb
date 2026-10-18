@@ -38,7 +38,7 @@ begin
 
   collection = nohead.collections.create(
     name: "Ruby smoke", slug: "sdk-ruby-#{SecureRandom.hex(4)}",
-    fields: [{ name: "Title", api_key: "title", type: "text", required: true }]
+    fields: [{ name: "Title", key: "title", type: "text", required: true }]
   )
   left[:collections] = collection.id
 
