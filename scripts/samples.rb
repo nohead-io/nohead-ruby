@@ -41,7 +41,7 @@ bodies = array.elements.map { |lambda_node| lambda_node.body.slice }
 samples = {}
 Calls::EVERY_CALL.zip(bodies).each do |call, body|
   transport = FakeTransport.new([Calls.method(:reply)])
-  nohead = Nohead::Client.new(api_key: "sk_live_sample", base_url: "https://api.test",
+  nohead = Nohead::Client.new(api_key: "nohead_sk_sample", base_url: "https://api.test",
                               project_id: "prj_sample", transport: transport)
   result = call.call(nohead)
   request = transport.requests.find { |r| r.uri.host == "api.test" }

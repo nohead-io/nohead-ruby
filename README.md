@@ -52,7 +52,7 @@ nohead = Nohead::Client.new(
 
 | Option | Default | |
 |---|---|---|
-| `api_key:` | `NOHEAD_API_KEY` | A project API key (`sk_live_...`). Required. |
+| `api_key:` | `NOHEAD_API_KEY` | A project API key (`nohead_sk_...`, or `nohead_pk_...` when published-only). Required. |
 | `base_url:` | `NOHEAD_API_URL`, else `https://api.nohead.io` | |
 | `project_id:` | the key's project | Looked up once with `GET /v1/me` when omitted. |
 | `max_retries:` | `2` | See [retries](#retries-and-idempotency). |
