@@ -34,7 +34,7 @@ module Helpers
 
   def client(replies, **)
     transport = FakeTransport.new(replies)
-    nohead = Nohead::Client.new(api_key: "sk_live_test", base_url: "https://api.test",
+    nohead = Nohead::Client.new(api_key: "nohead_sk_test", base_url: "https://api.test",
                                 project_id: "prj_1", transport: transport, **)
     [nohead, transport]
   end

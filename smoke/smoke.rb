@@ -6,7 +6,7 @@
 # after deleting what it created.
 #
 #   gem build nohead.gemspec && gem install --install-dir tmp/gems nohead-*.gem
-#   GEM_HOME=tmp/gems NOHEAD_API_URL=http://localhost:3000 NOHEAD_API_KEY=sk_live_... ruby smoke/smoke.rb
+#   GEM_HOME=tmp/gems NOHEAD_API_URL=http://localhost:3000 NOHEAD_API_KEY=nohead_sk_... ruby smoke/smoke.rb
 
 require "nohead"
 require "securerandom"

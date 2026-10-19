@@ -20,19 +20,19 @@ class ClientTest < Minitest::Test
   end
 
   def test_reads_the_environment
-    with_env("NOHEAD_API_KEY" => "sk_live_env", "NOHEAD_API_URL" => "https://env.test/") do
+    with_env("NOHEAD_API_KEY" => "nohead_sk_env", "NOHEAD_API_URL" => "https://env.test/") do
       transport = FakeTransport.new([json(200, record("rec_1"))])
       Nohead::Client.new(transport: transport).records.get("rec_1")
       request = transport.requests.first
       assert_equal "https://env.test/v1/records/rec_1", request.url
-      assert_equal "Bearer sk_live_env", request.headers["Authorization"]
+      assert_equal "Bearer nohead_sk_env", request.headers["Authorization"]
     end
   end
 
   def test_defaults_to_production
     with_env("NOHEAD_API_URL" => "") do
       transport = FakeTransport.new([json(200, record("rec_1"))])
-      Nohead::Client.new(api_key: "sk_live_x", transport: transport).records.get("rec_1")
+      Nohead::Client.new(api_key: "nohead_sk_x", transport: transport).records.get("rec_1")
       assert_equal "https://api.nohead.io/v1/records/rec_1", transport.requests.first.url
     end
   end
