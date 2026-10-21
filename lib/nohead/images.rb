@@ -39,7 +39,7 @@ module Nohead
     private_class_method :base_of
 
     def check_options(values)
-      bad = values.compact.find { it.to_s.match?(%r{[/@?#]}) }
+      bad = values.compact.find { |value| value.to_s.match?(%r{[/@?#]}) }
       raise ArgumentError, "Not an imgproxy option: #{bad}" if bad
     end
     private_class_method :check_options
