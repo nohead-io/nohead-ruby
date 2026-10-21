@@ -17,11 +17,13 @@ class ImagesTest < Minitest::Test
     assert_equal at("rs:fit:320:0"), Nohead::Images.url(Asset.new(BASE), width: 320)
     assert_equal BASE, Nohead::Images.url(BASE)
     assert_equal "#{BASE}@avif", Nohead::Images.url("#{BASE}@png", format: "avif")
+    assert_equal at("rs:fit:200:0"), Nohead::Images.url({ "image_url" => BASE }, width: 200, height: 0)
   end
 
   def test_refuses_options_that_would_break_the_path
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, gravity: "fp:0.5/0.3") }
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, options: ["bl:2@x"]) }
+    assert_raises(ArgumentError) { Nohead::Images.url(BASE, width: 300, fit: "crop") }
   end
 
   def test_refuses_what_is_not_a_ready_images_url

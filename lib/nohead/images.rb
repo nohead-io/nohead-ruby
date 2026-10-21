@@ -12,7 +12,7 @@ module Nohead
 
     module_function
 
-    # A rendition of an image (an asset, or its `image_url`). fit: "contain"
+    # A rendition of an image (an asset, as an object or a Hash, or its `image_url`). fit: "contain"
     # fits inside the box, "cover" fills it, cropping, "fill" stretches to it.
     # gravity: is what a crop keeps ("sm" for smart, "fp:0.5:0.3" for a focal
     # point); options: any other processing options, as written in a URL
@@ -22,15 +22,26 @@ module Nohead
       base = base_of(image)
       check_options([gravity, *options])
       at = base.index("/plain/")
-      segments = [
-        ("rs:#{FITS.fetch(fit.to_s)}:#{width || 0}:#{height || 0}" if width || height),
-        ("g:#{gravity}" if gravity), ("dpr:#{dpr}" if dpr), ("q:#{quality}" if quality), *options
-      ].compact
-      base[0...at] + segments.map { |segment| "/#{segment}" }.join + source(base[at..], format)
+      parts = [resize(fit, width, height), ("g:#{gravity}" if gravity), ("dpr:#{dpr}" if dpr),
+               ("q:#{quality}" if quality), *options].compact
+      base[0...at] + parts.map { |part| "/#{part}" }.join + source(base[at..], format)
     end
 
+    # rs:<fit>:<width>:<height>, or nothing without a size (0 is none).
+    def resize(fit, width, height)
+      type = FITS.fetch(fit.to_s) { raise ArgumentError, "fit must be one of #{FITS.keys.join(', ')}" }
+      width = nil if width&.zero?
+      height = nil if height&.zero?
+      "rs:#{type}:#{width || 0}:#{height || 0}" if width || height
+    end
+    private_class_method :resize
+
     def base_of(image)
-      base = image.is_a?(String) ? image : image.image_url
+      base = case image
+             when String then image
+             when Hash then image["image_url"] || image[:image_url]
+             else image.image_url
+             end
       raise ArgumentError, "Not a ready image: it has no image_url" if base.nil? || base.empty?
       raise ArgumentError, "Not a Nohead image URL: #{base}" unless base.include?("/plain/")
 
