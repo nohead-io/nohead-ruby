@@ -20,6 +20,7 @@ module Nohead
     def url(image, width: nil, height: nil, fit: "contain", format: nil, quality: nil, dpr: nil,
             gravity: nil, options: [])
       base = base_of(image)
+      check_options([gravity, *options])
       at = base.index("/plain/")
       segments = [
         ("rs:#{FITS.fetch(fit.to_s)}:#{width || 0}:#{height || 0}" if width || height),
@@ -36,6 +37,12 @@ module Nohead
       base
     end
     private_class_method :base_of
+
+    def check_options(values)
+      bad = values.compact.find { it.to_s.match?(%r{[/@?#]}) }
+      raise ArgumentError, "Not an imgproxy option: #{bad}" if bad
+    end
+    private_class_method :check_options
 
     # The source comes last; a format replaces any the URL already names.
     def source(source, format)

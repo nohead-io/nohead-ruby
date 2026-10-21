@@ -19,6 +19,11 @@ class ImagesTest < Minitest::Test
     assert_equal "#{BASE}@avif", Nohead::Images.url("#{BASE}@png", format: "avif")
   end
 
+  def test_refuses_options_that_would_break_the_path
+    assert_raises(ArgumentError) { Nohead::Images.url(BASE, gravity: "fp:0.5/0.3") }
+    assert_raises(ArgumentError) { Nohead::Images.url(BASE, options: ["bl:2@x"]) }
+  end
+
   def test_refuses_what_is_not_a_ready_images_url
     assert_raises(ArgumentError) { Nohead::Images.url(Asset.new(nil)) }
     assert_raises(ArgumentError) { Nohead::Images.url("https://example.com/cat.png") }
