@@ -36,6 +36,7 @@ module Calls
     ->(nohead) { nohead.records.search("posts", "hello", filter: { published_at: { exists: true } }, sort: "-published_at", expand: ["author"]) },
     ->(nohead) { nohead.records.revisions.list("rec_01J9ZQ3F8X", filter: { operation: "update" }) },
     ->(nohead) { nohead.records.revisions.get("rec_01J9ZQ3F8X", 1) },
+    ->(nohead) { nohead.revisions.get("rev_01J9ZQ3F8X") },
     ->(nohead) { nohead.records.revisions.revert("rec_01J9ZQ3F8X", 1, dry_run: true) },
     ->(nohead) { nohead.search("hello", collections: ["posts"], filter: { published_at: { exists: true } }) },
     ->(nohead) { nohead.collections.list(deleted: true) },

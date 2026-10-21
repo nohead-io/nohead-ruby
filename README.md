@@ -76,11 +76,14 @@ nohead.records.delete(post.id) # soft delete; records.restore undoes it
 
 Methods return the API's resources (see [Results](#results)) and raise on failure. Field values are under `data`, keyed by field API key.
 
+**Upserts.** With `upsert_on:`, the key of a `unique` field, `create` updates the record holding that value instead, if one exists, so a content sync can run again without duplicates: `nohead.records.create("products", data: { sku: "TEE-01", title: "Tee" }, upsert_on: "sku")`.
+
 **More:**
 
 - `count`, and `bulk` (up to 100 records at once)
 - `diff(record, from: 1, to: 2)`
 - `revisions.list` (`filter:` `operation`, `actor_id` and a `created_at` range such as `{ gte: Time.utc(2026, 10, 1) }`), `revisions.get` and `revisions.revert` (with `dry_run: true` for a preview)
+- a revision by its own ID, as webhooks and the activity log name it: `nohead.revisions.get("rev_...")`
 
 ## Drafts
 
@@ -195,8 +198,16 @@ end
 asset = nohead.assets.upload("cover.jpg")
 nohead.records.update(id, data: { cover: asset.id })
 
-url = nohead.assets.image_url(asset.id, width: 1200, format: "webp").url
 ```
+
+**Images.** Image URLs are open: an image's `image_url` serves the whole image, and any of [imgproxy's processing options](https://docs.imgproxy.net/usage/processing) written into it transform it. `Nohead::Images.url` builds them without a request:
+
+```ruby
+Nohead::Images.url(asset, width: 1200, height: 630, fit: "cover", gravity: "sm", format: "webp")
+Nohead::Images.url(asset.image_url, width: 400, dpr: 2, options: ["bl:2"])
+```
+
+`nohead.assets.image_url(asset.id, width: 1200, format: "webp").url` asks the API for one instead.
 
 **What `upload` accepts:** a path (String or Pathname), or an IO opened in binary mode. For bytes in memory, pass `StringIO.new(bytes)`.
 
@@ -229,7 +240,7 @@ results = nohead.search("content model", collections: %w[posts pages], filter: {
 results.meta.total_estimate
 ```
 
-Search needs `search_enabled` collections and the `search:read` scope. It pages through the first 1,000 hits.
+Search needs the `search:read` scope and covers every collection the key can read, matching their `searchable` fields. It pages through the first 1,000 hits. For search straight from a site's browser, without the API, use a search token from the web app with Meilisearch's own clients or InstantSearch.
 
 ## Schema
 
@@ -281,6 +292,7 @@ The API's resources come back as `Nohead::NoheadObject`s.
 | `records` | `list`, `get`, `create`, `update`, `delete`, `restore`, `publish`, `unpublish`, `publication`, `get_schedule`, `schedule`, `unschedule`, `scheduled_changes`, `drafts`, `count`, `bulk`, `diff`, `search` |
 | `drafts` | `create`, `list`, `get`, `update`, `discard`, `merge`, `schedule`, `unschedule` |
 | `records.revisions` | `list`, `get`, `revert` |
+| `revisions` | `get` (by its own `rev_` ID) |
 | `search` | across the project |
 | `collections` | `list`, `get`, `create`, `update`, `delete`, `restore`, `schema` |
 | `collections.schema_changes` | `list`, `get` |

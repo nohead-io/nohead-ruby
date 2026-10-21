@@ -52,9 +52,13 @@ module Nohead
       end
 
       # Creates an unpublished record: create("posts", data: { title: "Hello" }).
-      def create(collection, idempotency_key: nil, change_note: nil, **params)
+      # With upsert_on:, the key of a unique field, it updates the record holding
+      # that value instead, if one exists, so a sync can run again without
+      # duplicates; if_match: then applies to that update.
+      def create(collection, if_match: nil, idempotency_key: nil, change_note: nil, **params)
         @client.request("records_create", path: { collection_id: collection }, body: body_of(params),
-                                          idempotency_key: idempotency_key, change_note: change_note)
+                                          if_match: if_match, idempotency_key: idempotency_key,
+                                          change_note: change_note)
       end
 
       # Sets the given fields (nil clears one); others keep their values.
@@ -147,7 +151,7 @@ module Nohead
         @client.request("records_diff", path: { record_id: record }, query: { from: from, to: to })
       end
 
-      # Full-text search in one collection (search_enabled collections), most
+      # Full-text search in one collection, matching its searchable fields, most
       # relevant first, through the first 1,000 hits.
       def search(collection, query, filter: nil, sort: nil, expand: nil, limit: nil, cursor: nil)
         @client.paginate("collections_search", path: { collection_id: collection }, query: {
@@ -176,6 +180,14 @@ module Nohead
         @client.request("record_revisions_revert", path: { record_id: record, revision: revision },
                                                    query: { dry_run: dry_run || nil }, if_match: if_match,
                                                    idempotency_key: idempotency_key, change_note: change_note)
+      end
+    end
+
+    # A revision by its own ID ("rev_..."), as webhooks and the activity log name
+    # it. Readable while its record is deleted.
+    class RevisionsById < Resource
+      def get(revision)
+        @client.request("revisions_get", path: { revision_id: revision })
       end
     end
   end
