@@ -54,14 +54,18 @@ module Nohead
         @client.request("assets_complete", path: { asset_id: asset }, idempotency_key: idempotency_key)
       end
 
+      # `q` finds assets whose filename or alt text has every word, ignoring
+      # case ("hero jpg" finds `Hero-banner.jpg`). `kind` lists only assets of
+      # a kind ("image", "video", "audio", "document" or "other"), or of
+      # several (%w[image video]).
+      #
       # `content_type` lists only assets of a MIME type or `type/*` wildcard
       # ("image/*"), or of several (["image/*", "application/pdf"]), for
       # example the ones an asset field accepts (its `accepted_types`; an
       # empty list, like a field's, means any type).
-      def list(content_type: nil, deleted: nil, limit: nil, cursor: nil)
-        content_type = (content_type.empty? ? nil : { in: content_type }) if content_type.is_a?(Array)
-        @client.paginate("assets_list", query: { filter: { content_type: content_type, deleted: deleted },
-                                                 limit: limit, cursor: cursor })
+      def list(q: nil, kind: nil, content_type: nil, deleted: nil, limit: nil, cursor: nil)
+        filter = { kind: one_or_in(kind), content_type: one_or_in(content_type), deleted: deleted }
+        @client.paginate("assets_list", query: { q: q, filter: filter, limit: limit, cursor: cursor })
       end
 
       def get(asset)
@@ -105,6 +109,16 @@ module Nohead
       # A link to download the original file (`url`), valid for 2 minutes.
       def download_url(asset)
         @client.request("assets_download_url", path: { asset_id: asset })
+      end
+
+      private
+
+      # One value as it is, several as `[in]`; an empty list (like an asset
+      # field's accepted_types) is no filter.
+      def one_or_in(value)
+        return value unless value.is_a?(Array)
+
+        value.empty? ? nil : { in: value }
       end
     end
   end

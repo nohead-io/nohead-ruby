@@ -40,6 +40,14 @@ class PaginationTest < Minitest::Test
     assert_equal "saved", transport.requests.first.params["cursor"]
   end
 
+  def test_searches_assets_and_lists_them_by_kind
+    nohead, transport = client([page([], nil), page([], nil)])
+    nohead.assets.list(q: "hero jpg", kind: "image").data
+    nohead.assets.list(kind: %w[image video]).data
+    assert_equal({ "q" => "hero jpg", "filter[kind]" => "image" }, transport.requests[0].params)
+    assert_equal({ "filter[kind][in]" => "image,video" }, transport.requests[1].params)
+  end
+
   def test_lists_assets_by_content_type
     nohead, transport = client([page([], nil), page([], nil), page([], nil)])
     nohead.assets.list(content_type: "image/*").data

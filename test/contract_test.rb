@@ -67,6 +67,8 @@ class ContractTest < Minitest::Test
     ->(nohead) { nohead.migrations.list("posts", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.assets.list(content_type: "image/*", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.assets.list(content_type: %w[image/* application/pdf]) },
+    ->(nohead) { nohead.assets.list(q: "hero jpg", kind: "image") },
+    ->(nohead) { nohead.assets.list(kind: %w[image video]) },
     ->(nohead) { nohead.webhooks.list(limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.webhooks.deliveries.list("wh_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.webhooks.secrets.list("wh_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },

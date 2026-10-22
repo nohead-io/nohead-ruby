@@ -126,9 +126,9 @@ module Nohead
         @client.paginate("record_drafts_list", path: { record_id: record }, query: { limit: limit, cursor: cursor })
       end
 
-      # A collection's pending scheduled publishes and unpublishes, soonest
-      # first: one per change, so a record due to publish and later unpublish
-      # appears twice.
+      # A collection's pending scheduled changes, soonest first: publishes,
+      # unpublishes and draft merges, one per change, so a record due to
+      # publish and later unpublish appears twice.
       def scheduled_changes(collection, sort: nil, limit: nil, cursor: nil)
         @client.paginate("scheduled_changes_list", path: { collection_id: collection },
                                                    query: { sort: sort, limit: limit, cursor: cursor })
