@@ -102,14 +102,7 @@ module Nohead
         @client.request("assets_usage", path: { asset_id: asset })
       end
 
-      # A signed, cacheable URL of an image rendition (`url`).
-      def image_url(asset, width: nil, height: nil, fit: nil, format: nil, quality: nil)
-        @client.request("assets_image_url", path: { asset_id: asset }, query: {
-                          width: width, height: height, fit: fit, format: format, quality: quality
-                        })
-      end
-
-      # A 15-minute link to download the original file (`url`).
+      # A link to download the original file (`url`), valid for 2 minutes.
       def download_url(asset)
         @client.request("assets_download_url", path: { asset_id: asset })
       end

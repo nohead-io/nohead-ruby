@@ -15,7 +15,7 @@ module Nohead
     RETRYABLE_STATUSES = [429, 500, 502, 503, 504].freeze
     MAX_RETRY_AFTER = 60
 
-    attr_reader :records, :drafts, :collections, :fields, :migrations, :assets, :webhooks,
+    attr_reader :records, :revisions, :drafts, :collections, :fields, :migrations, :assets, :webhooks,
                 :audit_events, :feature_flags, :me, :health
 
     # api_key::     A project API key ("nohead_sk_...", or "nohead_pk_..." when
@@ -41,6 +41,7 @@ module Nohead
       @warned = {}
 
       @records = Resources::Records.new(self)
+      @revisions = Resources::RevisionsById.new(self)
       @drafts = Resources::Drafts.new(self)
       @collections = Resources::Collections.new(self)
       @fields = Resources::Fields.new(self)

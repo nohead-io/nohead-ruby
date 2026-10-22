@@ -130,7 +130,7 @@ class RequestsTest < Minitest::Test
       -> { nohead.webhooks.create(url: "https://example.com/hook", event_types: ["*"], change_note: "New") },
       -> { nohead.webhooks.update("wh_1", enabled: false, change_note: "Off") },
       -> { nohead.assets.create_upload(filename: "a.txt", content_type: "text/plain", byte_size: 1, change_note: "x") },
-      -> { nohead.records.create("posts", data: {}, if_match: 1) },
+      -> { nohead.records.bulk("posts", action: "publish", record_ids: [], if_match: 1) },
       -> { nohead.collections.update("posts", name: "Articles", if_match: 1) }
     ].each do |call|
       error = assert_raises(ArgumentError, &call)
