@@ -102,15 +102,6 @@ module Nohead
         @client.request("assets_usage", path: { asset_id: asset })
       end
 
-      # A rendition URL (`url`) from a few common options. Image URLs are open, so
-      # Nohead::Images.url builds any rendition from an asset's `image_url`
-      # without a request.
-      def image_url(asset, width: nil, height: nil, fit: nil, format: nil, quality: nil)
-        @client.request("assets_image_url", path: { asset_id: asset }, query: {
-                          width: width, height: height, fit: fit, format: format, quality: quality
-                        })
-      end
-
       # A link to download the original file (`url`), valid for 2 minutes.
       def download_url(asset)
         @client.request("assets_download_url", path: { asset_id: asset })

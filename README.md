@@ -207,7 +207,7 @@ Nohead::Images.url(asset, width: 1200, height: 630, fit: "cover", gravity: "sm",
 Nohead::Images.url(asset.image_url, width: 400, dpr: 2, options: ["bl:2"])
 ```
 
-`nohead.assets.image_url(asset.id, width: 1200, format: "webp").url` asks the API for one instead.
+Thumbnails: an image's `preview_url` fits in 640×640, as WebP.
 
 **What `upload` accepts:** a path (String or Pathname), or an IO opened in binary mode. For bytes in memory, pass `StringIO.new(bytes)`.
 
@@ -299,7 +299,7 @@ The API's resources come back as `Nohead::NoheadObject`s.
 | `collections.search_index` | `get`, `rebuild` |
 | `fields` | `list`, `get`, `create`, `update`, `delete`, `restore`, `order`, `reorder`, `remove_alias` |
 | `migrations` | `create`, `list`, `get`, `cancel` |
-| `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `update`, `delete`, `restore`, `purge`, `usage`, `image_url`, `download_url` |
+| `assets` | `upload`, `create_upload`, `complete`, `list`, `get`, `update`, `delete`, `restore`, `purge`, `usage`, `download_url` |
 | `webhooks` | `list`, `get`, `create`, `update`, `delete`, `restore`, `rotate_secret`, `test`, `unwrap` |
 | `webhooks.secrets` | `list`, `retire` |
 | `webhooks.deliveries` | `list`, `get`, `retry` |
