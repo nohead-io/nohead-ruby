@@ -5,7 +5,7 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
-## Unreleased
+## 0.6.0
 
 - API keys now start `nohead_sk_`, or `nohead_pk_` for published-only keys;
   keys in the old `sk_live_` format no longer work. The gem sends whatever key
