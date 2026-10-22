@@ -36,3 +36,7 @@ Metrics/BlockLength:
   Exclude:
     - test/**/*
     - "*.gemspec"
+
+# Keyword arguments take the API's parameter names, such as `q:`.
+Naming/MethodParameterName:
+  AllowedNames: [as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, q, to]
