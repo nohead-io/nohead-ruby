@@ -106,11 +106,6 @@ module Nohead
         @client.request("assets_usage", path: { asset_id: asset })
       end
 
-      # A link to download the original file (`url`), valid for 2 minutes.
-      def download_url(asset)
-        @client.request("assets_download_url", path: { asset_id: asset })
-      end
-
       private
 
       # One value as it is, several as `[in]`; an empty list (like an asset

@@ -1,7 +1,6 @@
 {
   "assets_complete": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.complete(\"ast_01J9ZQ3F8X\")\n",
   "assets_delete": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.delete(\"ast_01J9ZQ3F8X\")\n",
-  "assets_download_url": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.download_url(\"ast_01J9ZQ3F8X\")\n",
   "assets_get": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.get(\"ast_01J9ZQ3F8X\")\n",
   "assets_list": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nnohead.assets.list(deleted: true).each do |asset|\n  puts asset\nend\n",
   "assets_purge": "require \"nohead\"\n\nnohead = Nohead::Client.new\n\nresult = nohead.assets.purge(\"ast_01J9ZQ3F8X\")\n",
