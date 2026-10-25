@@ -20,6 +20,14 @@ class ImagesTest < Minitest::Test
     assert_equal at("rs:fit:200:0"), Nohead::Images.url({ "image_url" => BASE }, width: 200, height: 0)
   end
 
+  def test_writes_numbers_as_the_other_sdks_do
+    assert_equal at("rs:fit:800:600/dpr:2/q:80"),
+                 Nohead::Images.url(BASE, width: 800.0, height: 600.0, dpr: 2.0, quality: 80.0)
+    assert_equal at("rs:fit:400:0/dpr:1.5"), Nohead::Images.url(BASE, width: 400, dpr: 1.5)
+    assert_equal at("rs:fit:400:0"), Nohead::Images.url(BASE, width: 400, dpr: 0, quality: 0)
+    assert_equal at("rs:fit:0:300"), Nohead::Images.url(BASE, width: 0.0, height: 300, dpr: 0.0, quality: 0.0)
+  end
+
   def test_refuses_options_that_would_break_the_path
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, gravity: "fp:0.5/0.3") }
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, options: ["bl:2@x"]) }
