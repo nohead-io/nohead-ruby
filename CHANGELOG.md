@@ -7,6 +7,9 @@ section is its GitHub release's notes.
 
 ## Unreleased
 
+- `assets.upload` of a stream that cannot seek, such as a pipe or `$stdin`,
+  with `byte_size:` no longer raises `Errno::ESPIPE`. Its bytes are sent
+  once: a storage error is not retried, since they can't be read again.
 - `Webhooks.unwrap` reads headers, body and secret as bytes. A non-ASCII
   `webhook-id` with a binary body (as Rack passes it) no longer raises
   `Encoding::CompatibilityError`, a secret in another encoding raises
