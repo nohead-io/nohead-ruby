@@ -31,8 +31,8 @@ module Nohead
         raise WebhookVerificationError, "The webhook timestamp is too far from the current time"
       end
 
-      key = secret.delete_prefix("whsec_").unpack1("m0")
-      expected = [OpenSSL::HMAC.digest("SHA256", key, "#{id}.#{timestamp}.#{body}")].pack("m0")
+      # The body as bytes too, so a non-ASCII id and body in different encodings combine.
+      expected = [OpenSSL::HMAC.digest("SHA256", key(secret), "#{id}.#{timestamp}.#{body.to_s.b}")].pack("m0")
       matched = signatures.split.any? do |entry|
         version, signature = entry.split(",", 2)
         version == "v1" && signature && OpenSSL.secure_compare(signature, expected)
@@ -40,16 +40,26 @@ module Nohead
       raise WebhookVerificationError, "No webhook signature matches" unless matched
 
       NoheadObject.wrap(JSON.parse(body))
-    rescue ArgumentError
-      raise WebhookVerificationError, "The webhook secret is not base64"
     rescue JSON::ParserError
       raise WebhookVerificationError, "The webhook body is not JSON"
     end
 
-    def self.header(headers, name)
-      return headers[name] || headers[name.split("-").map(&:capitalize).join("-")] unless headers.is_a?(Hash)
+    def self.key(secret)
+      secret.b.delete_prefix("whsec_").unpack1("m0")
+    rescue ArgumentError
+      raise WebhookVerificationError, "The webhook secret is not base64"
+    end
+    private_class_method :key
 
-      headers.find { |key, _| key.to_s.downcase == name }&.last
+    # As bytes: headers come in any encoding, and not always valid, which
+    # must not raise ArgumentError or Encoding::CompatibilityError.
+    def self.header(headers, name)
+      value = if headers.is_a?(Hash)
+                headers.find { |key, _| key.to_s.downcase == name }&.last
+              else
+                headers[name] || headers[name.split("-").map(&:capitalize).join("-")]
+              end
+      value&.b
     end
     private_class_method :header
   end

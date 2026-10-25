@@ -5,6 +5,14 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
+## Unreleased
+
+- `Webhooks.unwrap` reads headers, body and secret as bytes. A non-ASCII
+  `webhook-id` with a binary body (as Rack passes it) no longer raises
+  `Encoding::CompatibilityError`, a secret in another encoding raises
+  `WebhookVerificationError`, and a header that is not valid UTF-8 is refused
+  for its signature or timestamp, not as "The webhook secret is not base64".
+
 ## 0.8.0
 
 - Assets have `file_url`, the file as uploaded, which downloads under its
