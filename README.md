@@ -320,11 +320,21 @@ bundle exec rake generate   # after updating openapi.json
 bundle exec rake samples    # after changing test/calls.rb (the docs' code samples)
 ```
 
+Before pushing, run what CI runs: the tests, RuboCop, and a check that the generated files are up to date:
+
+```bash
+bundle exec rake test
+bundle exec rubocop
+bundle exec rake generate samples && git diff --exit-code   # with your changes committed: a diff is a stale file
+gem build nohead.gemspec
+```
+
 **How the code is organized:**
 
 - `openapi.json` is the API's published contract. `rake generate` derives the operation table, `lib/nohead/operations.rb`, from it.
 - The methods are written by hand.
 - `test/contract_test.rb` runs every call in `test/calls.rb`. It fails when an API-key operation in the contract has no method, when a query parameter is never sent (no method takes it, or no call passes it), or when a request doesn't match its operation (method, path, query parameters and JSON body, against their schemas). Each call gets an example of its operation's response, built from the contract's schema, and must return it.
+- The unit tests answer with `test/fake_transport.rb`, which checks every request to the API and every reply against `openapi.json`, so a fixture can't drift from the API. Wrap a reply that breaks the contract on purpose (a gateway's HTML page, an unknown error type) in `raw(...)`.
 
 The smoke test (`smoke/smoke.rb`) runs the core flow against a real API, with the gem as installed from its built package. Nohead's own CI runs it on every API contract change.
 
