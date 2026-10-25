@@ -6,13 +6,13 @@ class RequestsTest < Minitest::Test
   include Helpers
 
   def test_encodes_path_parameters
-    nohead, transport = client([page([], nil)])
+    nohead, transport = client([page([])])
     nohead.records.list("my posts/1")
     assert_equal "https://api.test/v1/collections/my%20posts%2F1/records", transport.requests.first.url
   end
 
   def test_serializes_filters_sorts_and_expansions
-    nohead, transport = client([page([], nil)])
+    nohead, transport = client([page([])])
     nohead.records.list("posts", filter: { category: "news", featured: true, views: 3,
                                            published_after: Time.utc(2026, 1, 1), skip: nil },
                                  sort: "-published_at", expand: %w[author tags], limit: 50)
@@ -29,7 +29,7 @@ class RequestsTest < Minitest::Test
   end
 
   def test_serializes_filter_operators_escaping_commas_in_lists
-    nohead, transport = client([page([], nil)])
+    nohead, transport = client([page([])])
     nohead.records.list("products", filter: { brand: { ne: "acme" }, price: { gte: 10, lt: 50 },
                                               category: { in: ["shoes", "hats, caps", "a\\b"] },
                                               cover: { exists: true }, released: { gte: Date.new(2026, 10, 9) } },
@@ -140,7 +140,7 @@ class RequestsTest < Minitest::Test
   end
 
   def test_audit_event_filters
-    nohead, transport = client([page([], nil)])
+    nohead, transport = client([page([])])
     nohead.audit_events.list(filter: { type: "record.*", resource_type: %w[record draft], actor_type: "api_key",
                                        created_at: { gte: Time.utc(2026, 10, 1), lt: "2026-11-01T00:00:00Z" } })
     nohead.audit_events.list(filter: { "resource_type" => "field" })
@@ -152,7 +152,7 @@ class RequestsTest < Minitest::Test
   end
 
   def test_revision_filters
-    nohead, transport = client([page([], nil)])
+    nohead, transport = client([page([])])
     nohead.records.revisions.list("rec_1", filter: { operation: "merge", created_at: { gt: Time.utc(2026, 10, 1) } })
     assert_equal({ "filter[operation]" => "merge", "filter[created_at][gt]" => "2026-10-01T00:00:00.000Z" },
                  transport.requests.first.params)

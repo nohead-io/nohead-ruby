@@ -57,7 +57,7 @@ class ClientTest < Minitest::Test
                     expires_at: nil } }.freeze
 
   def test_looks_up_the_project_once
-    nohead, transport = client([json(200, ME), page([], nil)], project_id: nil)
+    nohead, transport = client([json(200, ME), page([])], project_id: nil)
     nohead.collections.list
     nohead.webhooks.list
     assert_equal ["/v1/me", "/v1/projects/prj_9/collections", "/v1/projects/prj_9/webhooks"],

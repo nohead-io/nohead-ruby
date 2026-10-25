@@ -68,7 +68,7 @@ module Helpers
     }
   end
 
-  def page(items, next_cursor, **meta)
-    json(200, { data: items, meta: { next_cursor: next_cursor, has_more: !next_cursor.nil?, **meta } })
+  def page(items, next_cursor: nil, has_more: false, **meta)
+    json(200, { data: items, meta: { next_cursor: next_cursor, has_more: has_more, **meta } })
   end
 end
