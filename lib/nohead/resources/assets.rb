@@ -105,16 +105,6 @@ module Nohead
       def usage(asset)
         @client.request("assets_usage", path: { asset_id: asset })
       end
-
-      private
-
-      # One value as it is, several as `[in]`; an empty list (like an asset
-      # field's accepted_types) is no filter.
-      def one_or_in(value)
-        return value unless value.is_a?(Array)
-
-        value.empty? ? nil : { in: value }
-      end
     end
   end
 end

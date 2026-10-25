@@ -7,6 +7,10 @@ section is its GitHub release's notes.
 
 ## Unreleased
 
+- `Images.url` writes the same URL as the other SDKs for the same image and
+  options: a whole-number Float is written as an integer (`dpr: 2.0` is
+  `dpr:2`, not `dpr:2.0`), and `dpr: 0` or `quality: 0` is left out rather
+  than written as `dpr:0` or `q:0`.
 - Deprecation and plan-usage warnings are given once per process, as in the
   other SDKs, rather than once per client: an app that builds a client per
   request no longer repeats them on every request.

@@ -14,8 +14,7 @@ module Nohead
       # `sort` is "-created_at" (the default) or "created_at".
       def list(filter: nil, sort: nil, limit: nil, cursor: nil)
         filter = filter&.transform_keys(&:to_sym)
-        types = filter&.[](:resource_type)
-        filter = filter.merge(resource_type: { in: types }) if types.is_a?(Array)
+        filter[:resource_type] = one_or_in(filter[:resource_type]) if filter&.key?(:resource_type)
         @client.paginate("audit_events_list",
                          query: { filter: filter, sort: sort, limit: limit, cursor: cursor })
       end

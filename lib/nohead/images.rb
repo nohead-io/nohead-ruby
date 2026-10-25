@@ -22,19 +22,28 @@ module Nohead
       base = base_of(image)
       check_options([gravity, *options])
       at = base.index("/plain/")
-      parts = [resize(fit, width, height), ("g:#{gravity}" if gravity), ("dpr:#{dpr}" if dpr),
+      dpr = number(dpr)
+      quality = number(quality)
+      parts = [resize(fit, number(width), number(height)), ("g:#{gravity}" if gravity), ("dpr:#{dpr}" if dpr),
                ("q:#{quality}" if quality), *options].compact
       base[0...at] + parts.map { |part| "/#{part}" }.join + source(base[at..], format)
     end
 
-    # rs:<fit>:<width>:<height>, or nothing without a size (0 is none).
+    # rs:<fit>:<width>:<height>, or nothing without a size.
     def resize(fit, width, height)
       type = FITS.fetch(fit.to_s) { raise ArgumentError, "fit must be one of #{FITS.keys.join(', ')}" }
-      width = nil if width&.zero?
-      height = nil if height&.zero?
       "rs:#{type}:#{width || 0}:#{height || 0}" if width || height
     end
     private_class_method :resize
+
+    # A number as the other SDKs write it (2.0 is 2), or nil for none (0 is none).
+    def number(value)
+      return value unless value.is_a?(Numeric)
+      return nil if value.zero?
+
+      value.is_a?(Float) && value.finite? && value == value.round ? value.round : value
+    end
+    private_class_method :number
 
     def base_of(image)
       base = case image

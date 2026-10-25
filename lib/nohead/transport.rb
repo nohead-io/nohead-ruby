@@ -20,10 +20,11 @@ module Nohead
       elsif body
         request.body = body
       end
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = uri.scheme == "https"
-      http.open_timeout = http.read_timeout = http.write_timeout = timeout
-      response = http.start { http.request(request) }
+      # The proxy comes from the environment (http_proxy, no_proxy), as Net::HTTP.new.
+      response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: timeout,
+                                                     read_timeout: timeout, write_timeout: timeout) do |http|
+        http.request(request)
+      end
       Response.new(response.code.to_i, response.each_header.to_h, response.body.to_s)
     rescue Net::OpenTimeout, Net::ReadTimeout, Net::WriteTimeout
       raise TimeoutError, "The request to #{uri.host} timed out after #{timeout} s"

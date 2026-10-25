@@ -57,6 +57,8 @@ class TransportTest < Minitest::Test
       send_request
       http = Offline.connection
       assert_equal [5, 5, 5], [http.open_timeout, http.read_timeout, http.write_timeout]
+      assert_predicate http, :use_ssl?
+      assert_predicate http, :proxy_from_env?
     end
   end
 

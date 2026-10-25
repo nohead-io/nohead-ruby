@@ -166,7 +166,7 @@ module Nohead
         value = values[Regexp.last_match(1)]
         raise Error, "Missing #{Regexp.last_match(1)}" if value.nil? || value.to_s.empty?
 
-        URI.encode_www_form_component(value.to_s).gsub("+", "%20")
+        URI.encode_uri_component(value.to_s)
       end
       @base_url + path
     end
@@ -203,8 +203,7 @@ module Nohead
       case value
       when Hash then value.to_h { |key, inner| [key.to_s, json_ready(inner)] }
       when Array then value.map { |item| json_ready(item) }
-      when Time, DateTime then value.to_time.utc.iso8601(3)
-      when Date then value.iso8601
+      when Time, DateTime, Date then scalar(value)
       when Symbol then value.to_s
       else value
       end
