@@ -12,6 +12,10 @@ section is its GitHub release's notes.
   `Encoding::CompatibilityError`, a secret in another encoding raises
   `WebhookVerificationError`, and a header that is not valid UTF-8 is refused
   for its signature or timestamp, not as "The webhook secret is not base64".
+- `Webhooks.unwrap` refuses an unset or empty secret with
+  `WebhookVerificationError` ("The webhook secret is empty"), instead of
+  `NoMethodError` or a signature mismatch, and verifies a repeated
+  `webhook-signature` header given as an Array.
 
 ## 0.8.0
 

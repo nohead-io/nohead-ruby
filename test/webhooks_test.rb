@@ -92,6 +92,22 @@ class WebhooksTest < Minitest::Test
     end
   end
 
+  def test_rejects_an_unset_or_empty_secret
+    [nil, "", "whsec_"].each do |secret|
+      error = assert_raises(Nohead::WebhookVerificationError) do
+        Nohead::Webhooks.unwrap(body, sign(body), secret: secret)
+      end
+      assert_match(/empty/, error.message)
+    end
+  end
+
+  def test_a_repeated_signature_header
+    headers = sign(body)
+    signatures = ["v1,bm90IHRoaXMgb25l", headers["webhook-signature"]]
+    event = Nohead::Webhooks.unwrap(body, headers.merge("webhook-signature" => signatures), secret: SECRET)
+    assert_equal "record.published", event.type
+  end
+
   def test_rejects_a_secret_that_is_not_base64
     error = assert_raises(Nohead::WebhookVerificationError) do
       Nohead::Webhooks.unwrap(body, sign(body), secret: "whsec_not base64!")

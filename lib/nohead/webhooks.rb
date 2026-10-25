@@ -45,7 +45,11 @@ module Nohead
     end
 
     def self.key(secret)
-      secret.b.delete_prefix("whsec_").unpack1("m0")
+      key = secret.to_s.b.delete_prefix("whsec_").unpack1("m0")
+      # Unset (nil) or empty, as from a missing environment variable.
+      raise WebhookVerificationError, "The webhook secret is empty" if key.empty?
+
+      key
     rescue ArgumentError
       raise WebhookVerificationError, "The webhook secret is not base64"
     end
@@ -59,6 +63,8 @@ module Nohead
               else
                 headers[name] || headers[name.split("-").map(&:capitalize).join("-")]
               end
+      # A repeated header, as some frameworks give it: its values, space-separated.
+      value = value.join(" ") if value.is_a?(Array)
       value&.b
     end
     private_class_method :header
