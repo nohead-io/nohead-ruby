@@ -7,6 +7,9 @@ section is its GitHub release's notes.
 
 ## Unreleased
 
+- Deprecation and plan-usage warnings are given once per process, as in the
+  other SDKs, rather than once per client: an app that builds a client per
+  request no longer repeats them on every request.
 - `assets.upload` of a stream that cannot seek, such as a pipe or `$stdin`,
   with `byte_size:` no longer raises `Errno::ESPIPE`. Its bytes are sent
   once: a storage error is not retried, since they can't be read again.

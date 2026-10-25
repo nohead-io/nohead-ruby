@@ -12,6 +12,14 @@ module Nohead
   #   nohead.records.list("posts").each { |post| puts post.data["title"] }
   class Client
     DEFAULT_BASE_URL = "https://api.nohead.io"
+
+    # Each warning is given once per process, as the other SDKs do: an app
+    # that builds a client per request would otherwise warn on every one.
+    WARNED = Set.new
+    WARNED_LOCK = Mutex.new
+    private_constant :WARNED_LOCK
+
+    def self.first_warning?(key) = WARNED_LOCK.synchronize { !WARNED.add?(key).nil? }
     RETRYABLE_STATUSES = [429, 500, 502, 503, 504].freeze
     MAX_RETRY_AFTER = 60
 
@@ -38,7 +46,6 @@ module Nohead
       @headers = headers.to_h { |key, value| [key.to_s, value.to_s] }
       @warnings = warnings
       @transport = transport
-      @warned = {}
 
       @records = Resources::Records.new(self)
       @revisions = Resources::RevisionsById.new(self)
@@ -259,15 +266,13 @@ module Nohead
     def warn_about(operation, headers)
       return unless @warnings
 
-      if headers["deprecation"] && !@warned[operation]
-        @warned[operation] = true
+      if headers["deprecation"] && self.class.first_warning?(operation)
         sunset = headers["sunset"] ? " and will be removed after #{headers['sunset']}" : ""
         link = headers["link"].to_s[/<([^>]+)>/, 1]
         warn "[nohead] #{operation} is deprecated#{sunset}#{". See #{link}" if link}"
       end
-      return unless headers["nohead-usage-warning"] && !@warned[:usage]
+      return unless headers["nohead-usage-warning"] && self.class.first_warning?(:usage)
 
-      @warned[:usage] = true
       warn "[nohead] Over a plan limit: #{headers['nohead-usage-warning']}"
     end
 

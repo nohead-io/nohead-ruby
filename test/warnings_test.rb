@@ -10,6 +10,9 @@ class WarningsTest < Minitest::Test
   DEPRECATED = { "deprecation" => "@1790000000", "sunset" => SUNSET, "link" => %(<#{LINK}>; rel="deprecation") }.freeze
   OVER = { "nohead-usage-warning" => "records 1001/1000" }.freeze
 
+  # Warnings are once per process: each test starts without any given.
+  def setup = Nohead::Client::WARNED.clear
+
   # What a client with these replies warns, as lines, while the block uses it.
   def warnings(replies, **)
     nohead, = client(replies, **)
@@ -24,6 +27,13 @@ class WarningsTest < Minitest::Test
     end
     assert_equal(["[nohead] records_get is deprecated and will be removed after #{SUNSET}. See #{LINK}",
                   "[nohead] records_publish is deprecated and will be removed after #{SUNSET}. See #{LINK}"], lines)
+  end
+
+  def test_warns_once_per_process_across_clients
+    first = warnings([json(200, record("rec_1"), DEPRECATED)]) { |nohead| nohead.records.get("rec_1") }
+    second = warnings([json(200, record("rec_1"), DEPRECATED)]) { |nohead| nohead.records.get("rec_1") }
+    assert_equal 1, first.size
+    assert_empty second
   end
 
   def test_a_deprecation_without_sunset_or_link
