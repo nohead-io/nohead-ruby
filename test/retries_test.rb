@@ -5,21 +5,43 @@ require_relative "test_helper"
 class RetriesTest < Minitest::Test
   include Helpers
 
-  NOW = { "retry-after" => "0" }.freeze
-
-  def test_retries_server_errors_with_one_idempotency_key
-    nohead, transport = client([api_error(500, "internal_error", NOW),
-                                api_error(503, "service_unavailable", NOW), json(201, record("r"))])
-    assert_equal "r", nohead.records.create("posts", data: {}).id
-    assert_equal 3, transport.requests.size
-    assert_equal 1, transport.requests.map { |request| request.headers["Idempotency-Key"] }.uniq.size
+  # Cases of plain API errors, by status.
+  def self.errors(types, pauses)
+    types.to_h { |status, type| ["#{status} #{type}", [-> { api_error(status, type) }, pauses]] }
   end
 
-  [502, 504].each do |status|
-    define_method("test_retries_#{status}") do
-      nohead, transport = client([api_error(status, "internal_error"), json(200, record("r"))])
-      nohead.records.get("r")
-      assert_equal 2, transport.requests.size
+  # What a write's first attempt gets, and the waits before its retries: nil
+  # when it is not retried. Backoff is 0.5 s here (no jitter).
+  CASES = {
+    "409 conflict" => [-> { api_error(409, "conflict", details: [{ code: "taken", message: "Taken" }]) }, nil],
+    "409 in progress" => [-> { api_error(409, "conflict", details: [{ code: "in_progress", message: "..." }]) }, [0.5]],
+    **errors({ 400 => "invalid_request", 401 => "authentication_error", 402 => "plan_limit_exceeded",
+               403 => "authorization_error", 404 => "not_found", 412 => "precondition_failed",
+               422 => "validation_error" }, nil),
+    **errors({ 429 => "rate_limited", 500 => "internal_error", 502 => "internal_error",
+               503 => "service_unavailable", 504 => "internal_error" }, [0.5]),
+    "503 with Retry-After" => [-> { api_error(503, "service_unavailable", { "retry-after" => "7" }) }, [7]],
+    "429 with Retry-After 60 s" => [-> { api_error(429, "rate_limited", { "retry-after" => "60" }) }, [60]],
+    "429 with Retry-After 61 s" => [-> { api_error(429, "rate_limited", { "retry-after" => "61" }) }, nil],
+    "429 with an unparseable Retry-After" => [-> { api_error(429, "rate_limited", { "retry-after" => "soon" }) },
+                                              [0.5]],
+    "connection error" => [-> { Nohead::ConnectionError.new("refused") }, [0.5]],
+    "timeout" => [-> { Nohead::TimeoutError.new("slow") }, [0.5]]
+  }.freeze
+
+  CASES.each do |name, (first, pauses)|
+    define_method("test_after_a_#{name.downcase.gsub(/\W+/, '_')}") do
+      nohead, transport = client([instance_exec(&first), json(201, record("r"))])
+      nohead.define_singleton_method(:rand) { 0.0 }
+      if pauses
+        assert_equal "r", nohead.records.create("posts", data: {}).id
+      else
+        assert_raises(Nohead::APIError) { nohead.records.create("posts", data: {}) }
+      end
+      assert_equal pauses.to_a, nohead.pauses
+      assert_equal pauses ? 2 : 1, transport.requests.size
+      # A retry is the same write: it keeps the Idempotency-Key.
+      assert_equal 1, transport.requests.map { |request| request.headers["Idempotency-Key"] }.uniq.size
     end
   end
 
@@ -36,51 +58,11 @@ class RetriesTest < Minitest::Test
     assert_equal [0.4375, 0.875, 1.75, 3.5, 7.0, 7.0], nohead.pauses
   end
 
-  def test_waits_out_a_short_retry_after
-    nohead, transport = client([api_error(429, "rate_limited", { "retry-after" => "3" }), json(200, record("r"))])
-    nohead.records.get("r")
-    assert_equal [3], nohead.pauses
-    assert_equal 2, transport.requests.size
-  end
-
   def test_reads_a_retry_after_date
     nohead, = client([api_error(429, "rate_limited", { "retry-after" => "Fri, 02 Oct 2026 12:00:05 GMT" }),
                       json(200, record("r"))])
     at_time(Time.utc(2026, 10, 2, 12)) { nohead.records.get("r") }
     assert_equal [5], nohead.pauses
-  end
-
-  def test_backs_off_on_a_429_without_retry_after
-    nohead, transport = client([api_error(429, "rate_limited"), json(200, record("r"))])
-    nohead.define_singleton_method(:rand) { 0.0 }
-    nohead.records.get("r")
-    assert_equal [0.5], nohead.pauses
-    assert_equal 2, transport.requests.size
-  end
-
-  def test_gives_up_on_a_long_retry_after
-    nohead, transport = client([api_error(429, "rate_limited", { "retry-after" => "120" })])
-    assert_raises(Nohead::RateLimitError) { nohead.records.get("r") }
-    assert_equal 1, transport.requests.size
-  end
-
-  def test_retries_a_request_in_progress
-    busy = api_error(409, "conflict", NOW, details: [{ code: "in_progress", message: "..." }])
-    nohead, transport = client([busy, json(201, record("r"))])
-    nohead.records.create("posts", data: {})
-    assert_equal 2, transport.requests.size
-  end
-
-  def test_does_not_retry_other_client_errors
-    nohead, transport = client([api_error(422, "validation_error")])
-    assert_raises(Nohead::ValidationError) { nohead.records.create("posts", data: {}) }
-    assert_equal 1, transport.requests.size
-  end
-
-  def test_retries_connection_failures
-    nohead, transport = client([Nohead::ConnectionError.new("refused"), json(200, record("r"))])
-    nohead.records.get("r")
-    assert_equal 2, transport.requests.size
   end
 
   def test_stops_after_max_retries
