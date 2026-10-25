@@ -1,14 +1,16 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "openssl"
+require "standardwebhooks"
 
+# Nohead::Webhooks.unwrap: the event it returns and its options. The
+# requests it rejects, each checked against the official library too, are in
+# test/standard_webhooks_test.rb.
 class WebhooksTest < Minitest::Test
   include Helpers
 
   NOW = Time.utc(2026, 10, 2, 12)
   SECRET = "whsec_#{['a-very-secret-key'].pack('m0')}".freeze
-  OTHER_SECRET = "whsec_#{['another-secret-key'].pack('m0')}".freeze
 
   def body
     JSON.generate(id: "wev_1", object: "event", type: "record.published",
@@ -26,11 +28,10 @@ class WebhooksTest < Minitest::Test
     Clock.now = nil
   end
 
+  # Headers signed by the official Standard Webhooks library.
   def sign(payload, timestamp: NOW.to_i, id: "msg_1", secret: SECRET)
-    key = secret.delete_prefix("whsec_").unpack1("m0")
-    digest = OpenSSL::HMAC.digest("SHA256", key, "#{id}.#{timestamp}.#{payload}")
     { "webhook-id" => id, "webhook-timestamp" => timestamp.to_s,
-      "webhook-signature" => "v1,#{[digest].pack('m0')}" }
+      "webhook-signature" => StandardWebhooks::Webhook.new(secret).sign(id, timestamp.to_s, payload) }
   end
 
   def test_the_standard_webhooks_spec_example
@@ -70,25 +71,6 @@ class WebhooksTest < Minitest::Test
     assert_equal "wev_1", Nohead::Webhooks.unwrap(body, old, secret: SECRET, tolerance: 600).id
     assert_raises(Nohead::WebhookVerificationError) do
       Nohead::Webhooks.unwrap(body, old, secret: SECRET, tolerance: 599)
-    end
-  end
-
-  def test_rejects_bad_requests
-    cases = {
-      "changed body" => [body.sub("Hi", "Bye"), sign(body)],
-      "changed webhook-id" => [body, sign(body).merge("webhook-id" => "msg_2")],
-      "signature of another version" => [body, sign(body).transform_values { |value| value.sub("v1,", "v2,") }],
-      "wrong secret" => [body, sign(body, secret: OTHER_SECRET)],
-      "old timestamp" => [body, sign(body, timestamp: NOW.to_i - 301)],
-      "future timestamp" => [body, sign(body, timestamp: NOW.to_i + 301)],
-      "timestamp not a number" => [body, sign(body).merge("webhook-timestamp" => "soon")],
-      "missing headers" => [body, {}],
-      "body not JSON" => ["not json", sign("not json")]
-    }
-    cases.each do |name, (payload, headers)|
-      assert_raises(Nohead::WebhookVerificationError, name) do
-        Nohead::Webhooks.unwrap(payload, headers, secret: SECRET)
-      end
     end
   end
 

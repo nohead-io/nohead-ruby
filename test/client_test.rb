@@ -53,10 +53,11 @@ class ClientTest < Minitest::Test
   end
 
   ME = { object: "principal", type: "api_key", user: nil,
-         api_key: { id: "key_1", project_id: "prj_9", scopes: [] } }.freeze
+         api_key: { id: "key_1", name: "Importer", scopes: [], published_only: false, project_id: "prj_9",
+                    expires_at: nil } }.freeze
 
   def test_looks_up_the_project_once
-    nohead, transport = client([json(200, ME), page([], nil)], project_id: nil)
+    nohead, transport = client([json(200, ME), page([])], project_id: nil)
     nohead.collections.list
     nohead.webhooks.list
     assert_equal ["/v1/me", "/v1/projects/prj_9/collections", "/v1/projects/prj_9/webhooks"],
@@ -64,14 +65,16 @@ class ClientTest < Minitest::Test
   end
 
   def test_without_a_project_key
-    me = { object: "principal", type: "user", user: {}, api_key: nil }
+    user = { id: "usr_1", email: "ada@example.com", name: "Ada", staff: false }
+    me = { object: "principal", type: "user", user: user, api_key: nil }
     nohead, = client([json(200, me)], project_id: nil)
     error = assert_raises(Nohead::Error) { nohead.collections.list }
     assert_match(/not a project API key/, error.message)
   end
 
   def test_objects_read_like_the_api
-    nohead, = client([json(200, record("rec_1", title: "Hi").merge(brand_new: 1))])
+    # brand_new: a property the contract does not have yet.
+    nohead, = client([raw(json(200, record("rec_1", title: "Hi").merge(brand_new: 1)))])
     post = nohead.records.get("rec_1")
     assert_equal "Hi", post.data["title"]
     assert_equal "Hi", post.data.title

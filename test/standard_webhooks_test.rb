@@ -60,50 +60,57 @@ class StandardWebhooksTest < Minitest::Test
     end
   end
 
-  def test_rejects_what_the_official_library_rejects
-    signature = signed["webhook-signature"]
-    cases = {
-      "tampered body" => [BODY.sub("Grüße", "Hallo"), signed],
-      "wrong secret" => [BODY, signed(secret: OTHER_SECRET)],
-      "old timestamp" => [BODY, signed(timestamp: NOW.to_i - 301)],
-      "future timestamp" => [BODY, signed(timestamp: NOW.to_i + 301)],
-      "timestamp not a number" => [BODY, signed.merge("webhook-timestamp" => "soon")],
-      "changed webhook-id" => [BODY, signed.merge("webhook-id" => "msg_2")],
-      "signature of another version" => [BODY, signed.merge("webhook-signature" => signature.sub("v1,", "v2,"))],
-      "signature not base64" => [BODY, signed.merge("webhook-signature" => "v1,not base64!")],
-      "non-ASCII signature" => [BODY, signed.merge("webhook-signature" => "v1,#{'é' * 22}")],
-      "non-ASCII signature of the right length" => [BODY, signed.merge("webhook-signature" => "v1,é#{signature[5..]}")],
-      "missing headers" => [BODY, {}]
-    }
-    cases.each do |name, (body, headers)|
-      assert_raises(StandardWebhooks::WebhookVerificationError, name) do
-        StandardWebhooks::Webhook.new(SECRET).verify(body, headers)
-      end
-      assert_raises(Nohead::WebhookVerificationError, name) { unwrap(body, headers) }
+  # Requests unwrap rejects, as [body, headers], with what the official
+  # library raises for them. Each is its own test.
+  REJECTED = {
+    "tampered body" => [-> { [BODY.sub("Grüße", "Hallo"), signed] }],
+    "wrong secret" => [-> { [BODY, signed(secret: OTHER_SECRET)] }],
+    "old timestamp" => [-> { [BODY, signed(timestamp: NOW.to_i - 301)] }],
+    "future timestamp" => [-> { [BODY, signed(timestamp: NOW.to_i + 301)] }],
+    "timestamp not a number" => [-> { [BODY, signed.merge("webhook-timestamp" => "soon")] }],
+    "changed webhook-id" => [-> { [BODY, signed.merge("webhook-id" => "msg_2")] }],
+    "signature of another version" =>
+      [-> { [BODY, signed.merge("webhook-signature" => signed["webhook-signature"].sub("v1,", "v2,"))] }],
+    "signature not base64" => [-> { [BODY, signed.merge("webhook-signature" => "v1,not base64!")] }],
+    "non-ASCII signature" => [-> { [BODY, signed.merge("webhook-signature" => "v1,#{'é' * 22}")] }],
+    "non-ASCII signature of the right length" =>
+      [-> { [BODY, signed.merge("webhook-signature" => "v1,é#{signed['webhook-signature'][5..]}")] }],
+    "missing headers" => [-> { [BODY, {}] }],
+    # Signed, but no event: the official library returns what JSON.parse raises.
+    "body not JSON" => [-> { ["not json", signed("not json")] }, JSON::ParserError]
+  }.freeze
+
+  REJECTED.each do |name, (request, official)|
+    define_method("test_rejects_#{name.gsub(/\W+/, '_')}") do
+      body, headers = instance_exec(&request)
+      assert_raises(official || StandardWebhooks::WebhookVerificationError) { StandardWebhooks::Webhook.new(SECRET).verify(body, headers) }
+      assert_raises(Nohead::WebhookVerificationError) { unwrap(body, headers) }
     end
   end
+
+  INVALID = (+"\xFF\xFE").force_encoding(Encoding::UTF_8).freeze
 
   # Headers that are not valid UTF-8, or not ASCII, are refused with
   # WebhookVerificationError and a message about the header, never with
   # ArgumentError or Encoding::CompatibilityError (the official library 1.1.0
   # raises those for some of these).
-  def test_rejects_headers_with_any_bytes
-    invalid = (+"\xFF\xFE").force_encoding(Encoding::UTF_8)
-    cases = {
-      "signature not UTF-8" => [signed.merge("webhook-signature" => "v1,#{invalid}"), /signature/],
-      "signature not UTF-8, then a valid one of another secret" =>
-        [signed.merge("webhook-signature" => "v1,#{invalid} #{signed(secret: OTHER_SECRET)['webhook-signature']}"),
-         /signature/],
-      "timestamp not UTF-8" => [signed.merge("webhook-timestamp" => invalid), /timestamp/],
-      "timestamp in other digits" => [signed.merge("webhook-timestamp" => "١٦١٤٢٦٥٣٣٠"), /timestamp/],
-      "webhook-id not UTF-8" => [signed.merge("webhook-id" => "msg_#{invalid}"), /signature/],
-      "non-ASCII webhook-id" => [signed.merge("webhook-id" => "msg_é"), /signature/],
-      "non-ASCII binary webhook-id" => [signed.merge("webhook-id" => "msg_é".b), /signature/]
-    }
-    cases.each do |name, (headers, message)|
+  BAD_HEADERS = {
+    "signature not UTF-8" => [-> { signed.merge("webhook-signature" => "v1,#{INVALID}") }, /signature/],
+    "signature not UTF-8, then a valid one of another secret" =>
+      [-> { signed.merge("webhook-signature" => "v1,#{INVALID} #{signed(secret: OTHER_SECRET)['webhook-signature']}") },
+       /signature/],
+    "timestamp not UTF-8" => [-> { signed.merge("webhook-timestamp" => INVALID) }, /timestamp/],
+    "timestamp in other digits" => [-> { signed.merge("webhook-timestamp" => "١٦١٤٢٦٥٣٣٠") }, /timestamp/],
+    "webhook-id not UTF-8" => [-> { signed.merge("webhook-id" => "msg_#{INVALID}") }, /signature/],
+    "non-ASCII webhook-id" => [-> { signed.merge("webhook-id" => "msg_é") }, /signature/],
+    "non-ASCII binary webhook-id" => [-> { signed.merge("webhook-id" => "msg_é".b) }, /signature/]
+  }.freeze
+
+  BAD_HEADERS.each do |name, (headers, message)|
+    define_method("test_rejects_a_#{name.gsub(/\W+/, '_')}") do
       [BODY, BODY.b].each do |body|
-        error = assert_raises(Nohead::WebhookVerificationError, name) { unwrap(body, headers) }
-        assert_match message, error.message, name
+        error = assert_raises(Nohead::WebhookVerificationError) { unwrap(body, instance_exec(&headers)) }
+        assert_match message, error.message
       end
     end
   end
@@ -111,13 +118,15 @@ class StandardWebhooksTest < Minitest::Test
   # The official library decodes the secret leniently (Base64.decode64 skips
   # what isn't base64), so it signs with any secret; unwrap refuses one that
   # is not strict base64.
-  def test_rejects_a_secret_that_is_not_base64
-    secrets = ["whsec_not base64!", "whsec_é", "whsec_#{['a-very-secret-key'].pack('m0')}é",
-               (+"whsec_\xFF").force_encoding(Encoding::UTF_8), SECRET.encode(Encoding::UTF_16LE)]
-    secrets.each do |secret|
-      error = assert_raises(Nohead::WebhookVerificationError, secret.inspect) do
-        unwrap(BODY, signed, secret: secret)
-      end
+  NOT_BASE64 = {
+    "with a space" => "whsec_not base64!", "non-ASCII" => "whsec_é",
+    "base64 then non-ASCII" => "whsec_#{['a-very-secret-key'].pack('m0')}é",
+    "not UTF-8" => (+"whsec_\xFF").force_encoding(Encoding::UTF_8), "in UTF-16" => SECRET.encode(Encoding::UTF_16LE)
+  }.freeze
+
+  NOT_BASE64.each do |name, secret|
+    define_method("test_rejects_a_secret_#{name.gsub(/\W+/, '_')}") do
+      error = assert_raises(Nohead::WebhookVerificationError) { unwrap(BODY, signed, secret: secret) }
       assert_match(/not base64/, error.message)
     end
   end

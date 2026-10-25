@@ -10,26 +10,37 @@ class ErrorsTest < Minitest::Test
     assert_raises(Nohead::APIError) { nohead.records.get("rec_1") }
   end
 
-  {
-    400 => ["invalid_request", Nohead::InvalidRequestError],
-    401 => ["authentication_error", Nohead::AuthenticationError],
-    402 => ["plan_limit_exceeded", Nohead::PlanLimitExceededError],
-    403 => ["authorization_error", Nohead::AuthorizationError],
-    404 => ["not_found", Nohead::NotFoundError],
-    409 => ["conflict", Nohead::ConflictError],
-    412 => ["precondition_failed", Nohead::PreconditionFailedError],
-    422 => ["validation_error", Nohead::ValidationError],
-    429 => ["rate_limited", Nohead::RateLimitError],
-    500 => ["internal_error", Nohead::InternalServerError],
-    503 => ["service_unavailable", Nohead::ServiceUnavailableError]
-  }.each do |status, (type, klass)|
+  # The class and a status of each error type.
+  CLASSES = {
+    "invalid_request" => [Nohead::InvalidRequestError, 400],
+    "authentication_error" => [Nohead::AuthenticationError, 401],
+    "plan_limit_exceeded" => [Nohead::PlanLimitExceededError, 402],
+    "authorization_error" => [Nohead::AuthorizationError, 403],
+    "not_found" => [Nohead::NotFoundError, 404],
+    "conflict" => [Nohead::ConflictError, 409],
+    "precondition_failed" => [Nohead::PreconditionFailedError, 412],
+    "validation_error" => [Nohead::ValidationError, 422],
+    "rate_limited" => [Nohead::RateLimitError, 429],
+    "internal_error" => [Nohead::InternalServerError, 500],
+    "service_unavailable" => [Nohead::ServiceUnavailableError, 503]
+  }.freeze
+
+  TYPES = Spec::CONTRACT.dig("components", "schemas", "ErrorType", "enum")
+
+  # Every type the contract has, so a new one fails until it has a class.
+  TYPES.each do |type|
     define_method("test_maps_#{type}") do
+      klass, status = CLASSES.fetch(type) { flunk "#{type} has no error class" }
       error = failure(api_error(status, type, { "x-a" => "b" }))
       assert_instance_of klass, error
       assert_equal "b", error.headers["x-a"]
       assert_equal [status, type, "req_1"], [error.status, error.type, error.request_id]
       assert_equal "#{status} #{type}: #{type} message (request req_1)", error.to_s
     end
+  end
+
+  def test_the_sdk_knows_the_contracts_types
+    assert_equal TYPES.sort, Nohead::ERROR_CLASSES.keys.sort
   end
 
   def test_details
@@ -52,7 +63,7 @@ class ErrorsTest < Minitest::Test
   def test_bodies_that_are_not_api_errors
     html = Nohead::Response.new(502, { "content-type" => "text/html", "x-request-id" => "req_9" },
                                 "<html>Bad gateway</html>")
-    error = failure(html)
+    error = failure(raw(html))
     assert_instance_of Nohead::InternalServerError, error
     assert_equal "<html>Bad gateway</html>", error.body
     assert_equal "req_9", error.request_id
@@ -62,8 +73,8 @@ class ErrorsTest < Minitest::Test
     # A gateway's JSON that looks like an envelope but is not one.
     body = { "error" => { "type" => ["x"], "message" => { "text" => "x" }, "request_id" => 7,
                           "details" => { "code" => "x" } } }
-    error = failure(Nohead::Response.new(502, { "content-type" => "application/json", "x-request-id" => "req_9" },
-                                         JSON.generate(body)))
+    error = failure(raw(Nohead::Response.new(502, { "content-type" => "application/json", "x-request-id" => "req_9" },
+                                             JSON.generate(body))))
     assert_instance_of Nohead::InternalServerError, error
     assert_equal [nil, "req_9", []], [error.type, error.request_id, error.details]
     assert_equal "502 error: Request failed with status 502 (request req_9)", error.to_s
@@ -71,12 +82,12 @@ class ErrorsTest < Minitest::Test
 
   def test_details_that_are_not_objects
     detail = { "code" => "revision_mismatch", "message" => "x", "current_revision" => 7 }
-    error = failure(api_error(412, "precondition_failed", {}, details: [1, nil, "x", detail]))
+    error = failure(raw(api_error(412, "precondition_failed", {}, details: [1, nil, "x", detail])))
     assert_equal 1, error.details.size
     assert_equal 7, error.current_revision
   end
 
   def test_unknown_types_stay_api_errors
-    assert_instance_of Nohead::APIError, failure(api_error(418, "teapot_error"))
+    assert_instance_of Nohead::APIError, failure(raw(api_error(418, "teapot_error")))
   end
 end

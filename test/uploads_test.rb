@@ -7,8 +7,7 @@ class UploadsTest < Minitest::Test
   include Helpers
 
   def asset(status)
-    { id: "ast_1", object: "asset", filename: "a.png", content_type: "image/png", byte_size: 3,
-      status: status }
+    example("assets_get", id: "ast_1", filename: "a.png", content_type: "image/png", byte_size: 3, status: status)
   end
 
   def created(expires_at: (Time.now + 900).utc.iso8601(3))
@@ -94,6 +93,46 @@ class UploadsTest < Minitest::Test
     assert_equal(["POST api.test", "PUT storage.test", "PUT storage.test", "POST api.test"],
                  transport.requests.map { |request| "#{request.method} #{request.uri.host}" })
     assert_equal "x", transport.requests[2].body
+  end
+
+  # A pipe (like $stdin) can't seek: its bytes go once, and a server error is
+  # the upload's failure.
+  def test_does_not_retry_bytes_it_cannot_read_again
+    nohead, transport = client([created, Nohead::Response.new(503, {}, ""), stored, ready])
+    IO.pipe do |reader, writer|
+      writer.write("x")
+      writer.close
+      error = assert_raises(Nohead::UploadError) { nohead.assets.upload(reader, byte_size: 1) }
+      assert_equal 503, error.status
+    end
+    assert_equal %w[POST PUT], transport.requests.map(&:method)
+    assert_equal "x", transport.requests[1].body
+  end
+
+  def test_does_not_retry_an_io_without_a_position
+    io = Object.new
+    def io.read(*) = "x"
+    nohead, transport = client([created, Nohead::Response.new(503, {}, ""), stored, ready])
+    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(io, byte_size: 1) }
+    assert_equal 503, error.status
+    assert_equal %w[POST PUT], transport.requests.map(&:method)
+  end
+
+  def test_retries_the_bytes_from_where_the_io_was
+    io = StringIO.new("skip:bytes")
+    io.read(5)
+    nohead, transport = client([created, Nohead::Response.new(503, {}, ""), stored, ready])
+    nohead.assets.upload(io)
+    assert_equal 5, transport.requests.first.json["byte_size"]
+    assert_equal(%w[bytes bytes], transport.requests.select { |request| request.method == "PUT" }.map(&:body))
+  end
+
+  def test_storage_failing_every_attempt
+    nohead, transport = client([created, Nohead::Response.new(503, {}, "")])
+    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(StringIO.new("x")) }
+    assert_equal 503, error.status
+    assert_match(/503/, error.message)
+    assert_equal %w[POST PUT PUT PUT], transport.requests.map(&:method)
   end
 
   def test_storage_refusing_the_bytes

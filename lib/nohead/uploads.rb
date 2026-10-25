@@ -24,11 +24,12 @@ module Nohead
         raise UploadError, "Uploading a stream that cannot seek needs byte_size:"
       @content_type = content_type ||
                       CONTENT_TYPES.fetch(File.extname(@filename).downcase, "application/octet-stream")
-      @start = @io.respond_to?(:pos) ? @io.pos : 0
+      @start = position(@io)
     end
 
-    # Whether the bytes can be sent again (for retries).
-    def replayable? = @io.respond_to?(:rewind) && @io.respond_to?(:pos)
+    # Whether the bytes can be sent again (for retries): a pipe or socket
+    # can't seek back to where they start.
+    def replayable? = !@start.nil? && @io.respond_to?(:pos=)
 
     def rewind
       @io.pos = @start if replayable?
@@ -52,6 +53,12 @@ module Nohead
       @io = io
       name = File.basename(io.path) if io.respond_to?(:path) && io.path
       [name, remaining(io)]
+    end
+
+    def position(io)
+      io.pos if io.respond_to?(:pos)
+    rescue IOError, SystemCallError
+      nil
     end
 
     def remaining(io)
