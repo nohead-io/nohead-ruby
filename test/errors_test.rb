@@ -52,7 +52,7 @@ class ErrorsTest < Minitest::Test
   def test_bodies_that_are_not_api_errors
     html = Nohead::Response.new(502, { "content-type" => "text/html", "x-request-id" => "req_9" },
                                 "<html>Bad gateway</html>")
-    error = failure(html)
+    error = failure(raw(html))
     assert_instance_of Nohead::InternalServerError, error
     assert_equal "<html>Bad gateway</html>", error.body
     assert_equal "req_9", error.request_id
@@ -62,8 +62,8 @@ class ErrorsTest < Minitest::Test
     # A gateway's JSON that looks like an envelope but is not one.
     body = { "error" => { "type" => ["x"], "message" => { "text" => "x" }, "request_id" => 7,
                           "details" => { "code" => "x" } } }
-    error = failure(Nohead::Response.new(502, { "content-type" => "application/json", "x-request-id" => "req_9" },
-                                         JSON.generate(body)))
+    error = failure(raw(Nohead::Response.new(502, { "content-type" => "application/json", "x-request-id" => "req_9" },
+                                             JSON.generate(body))))
     assert_instance_of Nohead::InternalServerError, error
     assert_equal [nil, "req_9", []], [error.type, error.request_id, error.details]
     assert_equal "502 error: Request failed with status 502 (request req_9)", error.to_s
@@ -71,12 +71,12 @@ class ErrorsTest < Minitest::Test
 
   def test_details_that_are_not_objects
     detail = { "code" => "revision_mismatch", "message" => "x", "current_revision" => 7 }
-    error = failure(api_error(412, "precondition_failed", {}, details: [1, nil, "x", detail]))
+    error = failure(raw(api_error(412, "precondition_failed", {}, details: [1, nil, "x", detail])))
     assert_equal 1, error.details.size
     assert_equal 7, error.current_revision
   end
 
   def test_unknown_types_stay_api_errors
-    assert_instance_of Nohead::APIError, failure(api_error(418, "teapot_error"))
+    assert_instance_of Nohead::APIError, failure(raw(api_error(418, "teapot_error")))
   end
 end

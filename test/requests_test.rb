@@ -111,7 +111,7 @@ class RequestsTest < Minitest::Test
   end
 
   def test_dry_runs_are_query_parameters
-    nohead, transport = client([json(200, {})])
+    nohead, transport = client([json(200, example("migrations_create"))])
     nohead.migrations.create("posts", field_id: "fld_1", type: "integer", dry_run: true)
     assert_equal "/v1/collections/posts/migrations", transport.requests.first.path
     assert_equal "true", transport.requests.first.params["dry_run"]
@@ -119,7 +119,7 @@ class RequestsTest < Minitest::Test
   end
 
   def test_diff_names_its_revisions
-    nohead, transport = client([json(200, { object: "record_diff", from: 1, to: 2, changes: [] })])
+    nohead, transport = client([json(200, { object: "record_diff", record_id: "rec_1", from: 1, to: 2, changes: [] })])
     nohead.records.diff("rec_1", from: 1, to: 2)
     assert_equal({ "from" => "1", "to" => "2" }, transport.requests.first.params)
   end

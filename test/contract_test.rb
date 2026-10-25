@@ -11,41 +11,11 @@
 # operations declare If-Match and Nohead-Change-Note.
 require_relative "test_helper"
 require_relative "calls"
-require "json_schemer"
 
 class ContractTest < Minitest::Test
   include Helpers
 
-  DOCUMENT = JSONSchemer.openapi(Spec::CONTRACT, format: false)
-
-  # The errors of `value` against the schema at `pointer` in the contract.
-  def errors(pointer, value)
-    DOCUMENT.ref(pointer.gsub("{", "%7B").gsub("}", "%7D")).validate(value).map { |error| error["error"] }
-  end
-
-  # A request's query parameters by name, as their schemas read them:
-  # filter[a][b]=v nests, and numbers and booleans are parsed when declared.
-  def query_values(request, params)
-    types = params.to_h { |param| [param.name, param.schema["type"]] }
-    request.params.each_with_object({}) do |(key, value), values|
-      name, *path = key.split(/[\[\]]+/).reject(&:empty?)
-      if path.any?
-        path[0...-1].reduce(values[name] ||= {}) { |node, part| node[part] ||= {} }[path.last] = value
-      else
-        values[name] = typed(value, types[name])
-      end
-    end
-  end
-
-  def typed(value, type)
-    if %w[integer number].include?(type) && value.match?(/\A-?\d+(\.\d+)?\z/)
-      value.include?(".") ? Float(value) : Integer(value)
-    elsif type == "boolean" && %w[true false].include?(value)
-      value == "true"
-    else
-      value
-    end
-  end
+  def errors(pointer, value) = Contract.errors(pointer, value)
 
   # A result as JSON, to compare with the reply it was parsed from.
   def plain(result)
@@ -92,26 +62,12 @@ class ContractTest < Minitest::Test
     assert_empty unsent.reject { |_, params| params.empty? }, "query parameters no call sends"
   end
 
-  # Checks a request against its operation, noting the parameters sent.
+  # Checks a request against its operation (as FakeTransport does with
+  # every request), noting the parameters sent.
   def check_request(request, sent)
     route = Spec.route_of(request.method, request.path)
-    keys = request.params.keys.map { |key| key.split("[").first }.uniq
-    assert_empty keys - route.query.map(&:name), "#{route.id} sends undeclared query parameters"
-    check_query_values(route, request)
-    if request.body
-      refute_nil route.body, "#{route.id} takes no body"
-      assert_empty errors(route.body.schema_at, request.json), "#{route.id} body"
-    else
-      refute route.body_required, "#{route.id} needs a body"
-    end
-    sent[route.id] |= keys
-  end
-
-  def check_query_values(route, request)
-    values = query_values(request, route.query)
-    route.query.select { |param| values.key?(param.name) }.each do |param|
-      assert_empty errors(param.schema_at, values[param.name]), "#{route.id} #{param.name}"
-    end
+    assert_empty Contract.request_problems(request), route.id
+    sent[route.id] |= request.params.keys.map { |key| key.split("[").first }.uniq
   end
 
   # The method returns the response its last request got.

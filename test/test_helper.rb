@@ -44,9 +44,20 @@ module Helpers
                          JSON.generate(body))
   end
 
+  # A reply that breaks the contract on purpose, which FakeTransport passes
+  # on unchecked.
+  def raw(response) = FakeTransport::Raw.new(response)
+
   def api_error(status, type, headers = {}, **extra)
     json(status, { error: { type: type, message: "#{type} message", request_id: "req_1", **extra } },
          headers)
+  end
+
+  # The contract's example of an operation's reply (test/spec.rb), with
+  # `fields` in place of its own.
+  def example(operation, **fields)
+    route = Spec::ROUTES.find { |candidate| candidate.id == operation }
+    JSON.parse(JSON.generate(Spec.example(route.response.schema))).merge(JSON.parse(JSON.generate(fields)))
   end
 
   def record(id, **data)

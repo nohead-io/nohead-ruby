@@ -7,8 +7,7 @@ class UploadsTest < Minitest::Test
   include Helpers
 
   def asset(status)
-    { id: "ast_1", object: "asset", filename: "a.png", content_type: "image/png", byte_size: 3,
-      status: status }
+    example("assets_get", id: "ast_1", filename: "a.png", content_type: "image/png", byte_size: 3, status: status)
   end
 
   def created(expires_at: (Time.now + 900).utc.iso8601(3))

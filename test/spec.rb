@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "json_schemer"
 
 # The contract (openapi.json) as the tests read it: which operation a request
 # is, and an example of any schema, which the mock replies in test/calls.rb are
@@ -12,8 +13,10 @@ module Spec
   Parameter = Struct.new(:name, :schema, :schema_at)
   Body = Struct.new(:schema, :schema_at)
   # `body` is nil for operations without one; `status` and `response` are the
-  # first success response's; `headers` are the names of the header parameters.
-  Route = Struct.new(:id, :method, :pattern, :query, :headers, :body, :body_required, :status, :response) # rubocop:disable Lint/StructNewOverride
+  # first success response's; `responses` are every documented response's, by
+  # status; `headers` are the names of the header parameters.
+  Route = Struct.new(:id, :method, :pattern, :query, :headers, :body, :body_required, :status, :response, # rubocop:disable Lint/StructNewOverride
+                     :responses)
 
   # A JSON pointer into the contract.
   def self.pointer(*parts) = "#/#{parts.map { |part| part.gsub('~', '~0').gsub('/', '~1') }.join('/')}"
@@ -50,7 +53,8 @@ module Spec
               place.call("query"), place.call("header").map(&:name),
               operation["requestBody"] && json("#{operation_at}/requestBody"),
               operation.dig("requestBody", "required") == true, Integer(status),
-              json("#{operation_at}/responses/#{status}"))
+              json("#{operation_at}/responses/#{status}"),
+              operation["responses"].keys.to_h { |code| [Integer(code), json("#{operation_at}/responses/#{code}")] })
   end
 
   def self.route_of(method, path)
@@ -110,5 +114,84 @@ module Spec
 
     parts = [*schema["allOf"], *schema.fetch("properties", {}).values, schema["items"]].compact
     [picks, *parts.flat_map { |part| choices(part, picks) }].uniq
+  end
+end
+
+# Whether a request or a reply matches the contract: test/fake_transport.rb
+# checks every one, and the contract test checks requests and examples.
+module Contract
+  DOCUMENT = JSONSchemer.openapi(Spec::CONTRACT, format: false)
+  # The error envelope, for an error status an operation does not list (any
+  # operation can fail with internal_error or service_unavailable).
+  ERROR = Spec::Body.new(Spec.at("#/components/schemas/Error").last, "#/components/schemas/Error")
+
+  # The errors of `value` against the schema at `pointer` in the contract.
+  def self.errors(pointer, value)
+    DOCUMENT.ref(pointer.gsub("{", "%7B").gsub("}", "%7D")).validate(value).map { |error| error["error"] }
+  end
+
+  # How a request to the API (a FakeTransport::Request) breaks its operation:
+  # method and path, declared query parameters and their values, and the JSON
+  # body. Empty when it matches.
+  def self.request_problems(request)
+    route = Spec::ROUTES.find { |candidate| candidate.method == request.method && request.path.match?(candidate.pattern) }
+    return ["no operation is #{request.method} #{request.path}"] unless route
+
+    keys = request.params.keys.map { |key| key.split("[").first }.uniq
+    problems = (keys - route.query.map(&:name)).map { |key| "undeclared query parameter #{key}" }
+    values = query_values(request, route.query)
+    route.query.select { |param| values.key?(param.name) }.each do |param|
+      problems.concat(errors(param.schema_at, values[param.name]).map { |error| "#{param.name}: #{error}" })
+    end
+    problems + body_problems(route, request)
+  end
+
+  def self.body_problems(route, request)
+    return route.body_required ? ["no body, which the operation needs"] : [] unless request.body
+    return ["a body, which the operation does not take"] unless route.body
+
+    body = JSON.parse(request.body)
+    errors(route.body.schema_at, body).map { |error| "body: #{error}" }
+  rescue JSON::ParserError
+    ["a body that is not JSON"]
+  end
+
+  # How a reply (a Nohead::Response) to a request of `route` breaks the
+  # contract: its status must be one the operation documents, or an error,
+  # and its body JSON that matches that status's schema. Empty when it matches.
+  def self.reply_problems(route, response)
+    body = route.responses[response.status] || (ERROR if response.status >= 400)
+    return ["#{route.id} documents no #{response.status} response"] unless body
+    unless response.headers["content-type"].to_s.include?("json")
+      return ["the #{response.status} reply is not JSON (mark a malformed reply raw)"]
+    end
+
+    errors(body.schema_at, JSON.parse(response.body)).map { |error| "#{response.status} reply: #{error}" }
+  rescue JSON::ParserError
+    ["the #{response.status} reply is not JSON (mark a malformed reply raw)"]
+  end
+
+  # A request's query parameters by name, as their schemas read them:
+  # filter[a][b]=v nests, and numbers and booleans are parsed when declared.
+  def self.query_values(request, params)
+    types = params.to_h { |param| [param.name, param.schema["type"]] }
+    request.params.each_with_object({}) do |(key, value), values|
+      name, *path = key.split(/[\[\]]+/).reject(&:empty?)
+      if path.any?
+        path[0...-1].reduce(values[name] ||= {}) { |node, part| node[part] ||= {} }[path.last] = value
+      else
+        values[name] = typed(value, types[name])
+      end
+    end
+  end
+
+  def self.typed(value, type)
+    if %w[integer number].include?(type) && value.match?(/\A-?\d+(\.\d+)?\z/)
+      value.include?(".") ? Float(value) : Integer(value)
+    elsif type == "boolean" && %w[true false].include?(value)
+      value == "true"
+    else
+      value
+    end
   end
 end
