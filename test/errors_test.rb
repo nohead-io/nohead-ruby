@@ -10,26 +10,37 @@ class ErrorsTest < Minitest::Test
     assert_raises(Nohead::APIError) { nohead.records.get("rec_1") }
   end
 
-  {
-    400 => ["invalid_request", Nohead::InvalidRequestError],
-    401 => ["authentication_error", Nohead::AuthenticationError],
-    402 => ["plan_limit_exceeded", Nohead::PlanLimitExceededError],
-    403 => ["authorization_error", Nohead::AuthorizationError],
-    404 => ["not_found", Nohead::NotFoundError],
-    409 => ["conflict", Nohead::ConflictError],
-    412 => ["precondition_failed", Nohead::PreconditionFailedError],
-    422 => ["validation_error", Nohead::ValidationError],
-    429 => ["rate_limited", Nohead::RateLimitError],
-    500 => ["internal_error", Nohead::InternalServerError],
-    503 => ["service_unavailable", Nohead::ServiceUnavailableError]
-  }.each do |status, (type, klass)|
+  # The class and a status of each error type.
+  CLASSES = {
+    "invalid_request" => [Nohead::InvalidRequestError, 400],
+    "authentication_error" => [Nohead::AuthenticationError, 401],
+    "plan_limit_exceeded" => [Nohead::PlanLimitExceededError, 402],
+    "authorization_error" => [Nohead::AuthorizationError, 403],
+    "not_found" => [Nohead::NotFoundError, 404],
+    "conflict" => [Nohead::ConflictError, 409],
+    "precondition_failed" => [Nohead::PreconditionFailedError, 412],
+    "validation_error" => [Nohead::ValidationError, 422],
+    "rate_limited" => [Nohead::RateLimitError, 429],
+    "internal_error" => [Nohead::InternalServerError, 500],
+    "service_unavailable" => [Nohead::ServiceUnavailableError, 503]
+  }.freeze
+
+  TYPES = Spec::CONTRACT.dig("components", "schemas", "ErrorType", "enum")
+
+  # Every type the contract has, so a new one fails until it has a class.
+  TYPES.each do |type|
     define_method("test_maps_#{type}") do
+      klass, status = CLASSES.fetch(type) { flunk "#{type} has no error class" }
       error = failure(api_error(status, type, { "x-a" => "b" }))
       assert_instance_of klass, error
       assert_equal "b", error.headers["x-a"]
       assert_equal [status, type, "req_1"], [error.status, error.type, error.request_id]
       assert_equal "#{status} #{type}: #{type} message (request req_1)", error.to_s
     end
+  end
+
+  def test_the_sdk_knows_the_contracts_types
+    assert_equal TYPES.sort, Nohead::ERROR_CLASSES.keys.sort
   end
 
   def test_details
