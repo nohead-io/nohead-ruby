@@ -318,8 +318,7 @@ module Nohead
                  end
       return revision if revision.is_a?(Integer)
 
-      raise ArgumentError, "if_match takes a revision number, or a record or draft (or { revision: 3 }), " \
-                           "not #{if_match.inspect}"
+      raise ArgumentError, "if_match takes a revision number, or a record, draft or hash with a revision"
     end
 
     def checked_base_url(url)

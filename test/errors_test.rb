@@ -101,6 +101,7 @@ class ErrorsTest < Minitest::Test
     nohead, transport = client([raw(moved)])
     error = assert_raises(Nohead::APIError) { nohead.records.get("rec_1") }
     assert_instance_of Nohead::APIError, error
+    assert_equal "redirect", error.type
     assert_equal "301 redirect: The API answered with a redirect to https://api.nohead.io/v1/records/rec_1; " \
                  "check the base URL", error.message
     assert_equal "The API answered with a redirect to https://api.nohead.io/v1/records/rec_1; check the base URL",

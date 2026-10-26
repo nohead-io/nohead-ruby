@@ -28,7 +28,7 @@ module Nohead
       # The SDK doesn't follow redirects: one means the base URL is off.
       error = redirect?(status) ? {} : Nohead.error_envelope(body)
       @status = status
-      @type = error["type"]
+      @type = redirect?(status) ? "redirect" : error["type"]
       @request_id = error["request_id"] || headers["x-request-id"]
       @details = Array(error["details"]).map { |detail| NoheadObject.wrap(detail) }
       @headers = headers
@@ -44,7 +44,7 @@ module Nohead
 
     def to_s
       suffix = request_id ? " (request #{request_id})" : ""
-      "#{status} #{type || (redirect?(status) ? 'redirect' : 'error')}: #{super}#{suffix}"
+      "#{status} #{type || 'error'}: #{super}#{suffix}"
     end
 
     private
