@@ -79,7 +79,7 @@ class WebhooksTest < Minitest::Test
       error = assert_raises(Nohead::WebhookVerificationError) do
         Nohead::Webhooks.unwrap(body, sign(body), secret: secret)
       end
-      assert_match(/empty/, error.message)
+      assert_equal "The webhook secret is empty", error.message # the other SDKs use these words
     end
   end
 

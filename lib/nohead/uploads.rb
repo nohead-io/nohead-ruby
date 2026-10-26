@@ -19,10 +19,11 @@ module Nohead
 
     def initialize(file, filename: nil, content_type: nil, byte_size: nil)
       name, size = file.is_a?(String) || file.is_a?(Pathname) ? open_path(Pathname(file)) : open_io(file)
-      @filename = filename || name || "upload"
+      # An empty filename or content type is the same as none.
+      @filename = present(filename) || present(name) || "upload"
       @byte_size = byte_size || size or
         raise UploadError, "Uploading a stream that cannot seek needs byte_size:"
-      @content_type = content_type ||
+      @content_type = present(content_type) ||
                       CONTENT_TYPES.fetch(File.extname(@filename).downcase, "application/octet-stream")
       @start = position(@io)
     end
@@ -40,6 +41,10 @@ module Nohead
     end
 
     private
+
+    def present(value)
+      value unless value.to_s.empty?
+    end
 
     def open_path(path)
       @io = path.open("rb")

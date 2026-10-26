@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+
 module Nohead
   # The base of every error the SDK raises.
   class Error < StandardError; end
@@ -18,22 +20,36 @@ module Nohead
     attr_reader :headers
     # The parsed response body, or its text when it was not JSON.
     attr_reader :body
+    # The API's own message, without the status, type and request ID that
+    # `message` adds.
+    attr_reader :api_message
 
     def initialize(status, body, headers)
-      error = Nohead.error_envelope(body)
+      # The SDK doesn't follow redirects: one means the base URL is off.
+      error = redirect?(status) ? {} : Nohead.error_envelope(body)
       @status = status
-      @type = error["type"]
+      @type = redirect?(status) ? "redirect" : error["type"]
       @request_id = error["request_id"] || headers["x-request-id"]
       @details = Array(error["details"]).map { |detail| NoheadObject.wrap(detail) }
       @headers = headers
       @body = body
-      super(error["message"] || "Request failed with status #{status}")
+      @api_message = if redirect?(status)
+                       to = headers["location"].to_s.empty? ? "" : " to #{headers['location']}"
+                       "The API answered with a redirect#{to}; check the base URL"
+                     else
+                       error["message"] || "Request failed with status #{status}"
+                     end
+      super(@api_message)
     end
 
     def to_s
       suffix = request_id ? " (request #{request_id})" : ""
       "#{status} #{type || 'error'}: #{super}#{suffix}"
     end
+
+    private
+
+    def redirect?(status) = status.between?(300, 399)
   end
 
   class InvalidRequestError < APIError; end
@@ -99,7 +115,8 @@ module Nohead
 
   # The error for a response, by its `type`, or by status when it has none.
   def self.api_error(status, body, headers)
-    klass = ERROR_CLASSES[error_envelope(body)["type"]] ||
+    klass = (APIError if status < 400) ||
+            ERROR_CLASSES[error_envelope(body)["type"]] ||
             if status == 503 then ServiceUnavailableError
             elsif status >= 500 then InternalServerError
             else APIError
@@ -114,13 +131,20 @@ module Nohead
     return {} unless error.is_a?(Hash)
 
     fields = error.slice("type", "message", "request_id").select { |_, value| value.is_a?(String) }
-    # Only hashes: current_revision reads each detail's fields.
-    fields["details"] = error["details"].grep(Hash) if error["details"].is_a?(Array)
+    fields["details"] = error["details"].map { |detail| error_detail(detail) } if error["details"].is_a?(Array)
     fields
   end
 
+  # A detail that isn't an object is kept, as its text, with the code "unknown".
+  def self.error_detail(detail)
+    return detail if detail.is_a?(Hash)
+
+    { "code" => "unknown", "message" => detail.is_a?(String) ? detail : JSON.generate(detail) }
+  end
+
+  # Seconds from `Retry-After`: a number of seconds or an HTTP date, else nil.
   def self.retry_after_seconds(headers)
-    value = headers["retry-after"] or return nil
+    value = headers["retry-after"]&.strip or return nil
     return [Float(value), 0].max if value.match?(/\A\d+(\.\d+)?\z/)
 
     [Time.httpdate(value) - Time.now, 0].max

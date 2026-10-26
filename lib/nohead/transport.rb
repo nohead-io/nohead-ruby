@@ -3,6 +3,7 @@
 require "net/http"
 require "openssl"
 require "uri"
+require "zlib"
 
 module Nohead
   # A response: status, headers (lowercase names) and body text.
@@ -30,6 +31,9 @@ module Nohead
       raise TimeoutError, "The request to #{uri.host} timed out after #{timeout} s"
     rescue SocketError, SystemCallError, IOError, OpenSSL::SSL::SSLError => e
       raise ConnectionError, "Could not reach #{uri.host}: #{e.message}"
+    # A broken status line, header or compressed body: retried like a dropped connection.
+    rescue Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, Zlib::Error => e
+      raise ConnectionError, "The response from #{uri.host} could not be read: #{e.message}"
     end
   end
 end

@@ -26,6 +26,65 @@ section is its GitHub release's notes.
   `WebhookVerificationError` ("The webhook secret is empty"), instead of
   `NoMethodError` or a signature mismatch, and verifies a repeated
   `webhook-signature` header given as an Array.
+- A path value of `"."` or `".."` (an ID such as `records.get(".")`) raises
+  `Nohead::Error` (`Invalid record_id: "."`) before anything is sent, as
+  `nil` or `""` does, instead of reaching a URL that a proxy could resolve to
+  another path.
+- An empty string is the same as leaving an option out, as in the other
+  SDKs: `project_id: ""` looks the project up, `idempotency_key: ""`
+  generates a key (it was sent empty) and `change_note: ""` sends no
+  `Nohead-Change-Note` header.
+- `base_url:` loses every trailing slash (it lost one), and a base URL that
+  isn't `http` or `https` raises `Nohead::Error` ("base_url must be an http or
+  https URL") when the client is built, instead of `NoMethodError` at the
+  first request.
+- Headers are sent once per name, whatever its case: the client's
+  `headers:` replace the SDK's own, and the ones request options set
+  (`Content-Type`, `Idempotency-Key`, `If-Match`, `Nohead-Change-Note`)
+  replace both. A custom `transport:` used to get both spellings.
+- `if_match:` takes a Hash with a revision (`{ revision: 3 }`) as well as a
+  revision number or a record or draft; anything else, such as `"3"`, raises
+  `ArgumentError` (a Hash or String was sent as it was written).
+- The project lookup (`GET /v1/me`, without `project_id:`) runs once when
+  several threads need it at the same time.
+- `search` with both `collections:` and a `collection` filter searches
+  `collections:`, as the other SDKs do (the filter won).
+- `APIError#api_message` is the API's own message, without the status, type
+  and request ID that `message` adds.
+- A redirect is an `APIError` whose message says to check the base URL
+  (`301 redirect: The API answered with a redirect to <Location>; check the
+  base URL`), instead of "Request failed with status 301".
+- A malformed response (a broken status line or header,
+  `Net::HTTPBadResponse`, `Net::HTTPHeaderSyntaxError`, `Net::ProtocolError`,
+  or a broken compressed body) is a `ConnectionError`, retried like a
+  dropped connection, instead of escaping as Net::HTTP's own error.
+- A list call whose response isn't a page raises `Nohead::Error` ("The API's
+  response could not be read (HTTP 200)") instead of `KeyError` or
+  `NoMethodError`.
+- `Retry-After` is read with spaces around it (`" 5"`); anything but whole or
+  decimal seconds or an HTTP date is ignored, as before.
+- Error details that aren't objects are kept, with the code `"unknown"` and
+  the value as their message, instead of left out.
+- An empty `Deprecation` header no longer warns.
+- `on_retry:`, a client option, is called before each retry's wait (of
+  uploads' bytes too) with a `Nohead::RetryEvent`: the attempt, the delay in
+  seconds, the URL, and the status or error that failed, as the other SDKs'
+  retry callbacks are.
+- `with_options(timeout:, max_retries:, headers:, on_retry:)` returns a copy
+  of the client with other settings, sharing its project lookup.
+- `timeout:` is documented as what it is: the longest wait without progress
+  (connecting, waiting for the response, between reads and writes of a
+  body), not a limit on the whole attempt.
+- `assets.upload` raises `UploadError` ("Could not upload a.png: <reason>",
+  with the `ConnectionError` as its `cause`) when storage can't be reached
+  or times out, as it does when storage refuses the bytes, instead of
+  `ConnectionError` or `TimeoutError`.
+- `assets.upload` with `filename: ""` or `content_type: ""` uses the
+  defaults (the file's name, else `upload`; the extension's type, else
+  `application/octet-stream`) instead of sending them empty.
+- `Images.url` leaves out options given as `""` (`gravity: ""`,
+  `format: ""`...) instead of writing `g:` or a trailing `@`, and `fit: nil`
+  (or `""`) means the default `contain` instead of raising `ArgumentError`.
 
 ## 0.8.0
 

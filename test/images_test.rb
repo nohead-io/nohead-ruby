@@ -28,6 +28,16 @@ class ImagesTest < Minitest::Test
     assert_equal at("rs:fit:0:300"), Nohead::Images.url(BASE, width: 0.0, height: 300, dpr: 0.0, quality: 0.0)
   end
 
+  def test_empty_options_are_left_out
+    empty = { height: "", fit: "", gravity: "", format: "", quality: "", dpr: "", options: ["", nil] }
+    assert_equal at("rs:fit:300:0"), Nohead::Images.url(BASE, width: 300, **empty)
+  end
+
+  def test_no_fit_is_contain
+    assert_equal at("rs:fit:300:0"), Nohead::Images.url(BASE, width: 300, fit: nil)
+    assert_equal BASE, Nohead::Images.url(BASE, fit: nil)
+  end
+
   def test_refuses_options_that_would_break_the_path
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, gravity: "fp:0.5/0.3") }
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, options: ["bl:2@x"]) }

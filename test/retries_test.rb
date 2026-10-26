@@ -25,6 +25,13 @@ class RetriesTest < Minitest::Test
     "429 with Retry-After 61 s" => [-> { api_error(429, "rate_limited", { "retry-after" => "61" }) }, nil],
     "429 with an unparseable Retry-After" => [-> { api_error(429, "rate_limited", { "retry-after" => "soon" }) },
                                               [0.5]],
+    "429 with Retry-After between spaces" => [-> { api_error(429, "rate_limited", { "retry-after" => " 5 " }) }, [5]],
+    "429 with Retry-After 1.5 s" => [-> { api_error(429, "rate_limited", { "retry-after" => "1.5" }) }, [1.5]],
+    # Not seconds or an HTTP date: backoff instead.
+    **%w[+5 .5 -1 1e3 inf nan 0x10 2026-10-02T12:00:05Z].each_with_index.to_h do |value, index|
+      ["429 with unreadable Retry-After #{index}",
+       [-> { api_error(429, "rate_limited", { "retry-after" => value }) }, [0.5]]]
+    end,
     "connection error" => [-> { Nohead::ConnectionError.new("refused") }, [0.5]],
     "timeout" => [-> { Nohead::TimeoutError.new("slow") }, [0.5]]
   }.freeze
@@ -45,6 +52,21 @@ class RetriesTest < Minitest::Test
     end
   end
 
+  def test_on_retry_hears_of_each_retry_before_its_wait
+    events = []
+    nohead, = client([api_error(503, "service_unavailable"), Nohead::ConnectionError.new("reset"),
+                      json(200, record("r"))], on_retry: ->(event) { events << [event, nohead.pauses.size] })
+    nohead.define_singleton_method(:rand) { 0.0 }
+    nohead.records.get("r")
+    first, second = events
+    assert_equal [1, 0.5, "https://api.test/v1/records/r", 503],
+                 first[0].to_h.values_at(:attempt, :delay, :url, :status)
+    assert_instance_of Nohead::ServiceUnavailableError, first[0].error
+    assert_equal [2, 1.0, nil], second[0].to_h.values_at(:attempt, :delay, :status)
+    assert_equal "reset", second[0].error.message
+    assert_equal [0, 1], events.map(&:last)
+  end
+
   def test_gives_up_after_the_default_two_retries
     nohead, transport = client([api_error(500, "internal_error")])
     assert_raises(Nohead::InternalServerError) { nohead.records.get("r") }
@@ -58,11 +80,12 @@ class RetriesTest < Minitest::Test
     assert_equal [0.4375, 0.875, 1.75, 3.5, 7.0, 7.0], nohead.pauses
   end
 
-  def test_reads_a_retry_after_date
-    nohead, = client([api_error(429, "rate_limited", { "retry-after" => "Fri, 02 Oct 2026 12:00:05 GMT" }),
-                      json(200, record("r"))])
-    at_time(Time.utc(2026, 10, 2, 12)) { nohead.records.get("r") }
-    assert_equal [5], nohead.pauses
+  def test_reads_a_retry_after_date_in_each_http_format
+    ["Fri, 02 Oct 2026 12:00:05 GMT", "Friday, 02-Oct-26 12:00:05 GMT", "Fri Oct  2 12:00:05 2026"].each do |date|
+      nohead, = client([api_error(429, "rate_limited", { "retry-after" => date }), json(200, record("r"))])
+      at_time(Time.utc(2026, 10, 2, 12)) { nohead.records.get("r") }
+      assert_equal [5], nohead.pauses, date
+    end
   end
 
   def test_stops_after_max_retries

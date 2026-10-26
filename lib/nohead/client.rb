@@ -6,6 +6,13 @@ require "time"
 require "uri"
 
 module Nohead
+  # A retry about to happen, as `on_retry:` gets it: `attempt` is 1 for a
+  # request's first retry, `delay` the seconds the client waits before it,
+  # `url` the URL retried, `status` the status that failed (nil when the
+  # connection did), and `error` the APIError or ConnectionError (nil for
+  # a status from storage).
+  RetryEvent = Data.define(:attempt, :delay, :url, :status, :error)
+
   # A client for the Nohead API, authenticated with a project API key.
   #
   #   nohead = Nohead::Client.new # NOHEAD_API_KEY
@@ -26,53 +33,73 @@ module Nohead
     attr_reader :records, :revisions, :drafts, :collections, :fields, :migrations, :assets, :webhooks,
                 :audit_events, :feature_flags, :me, :health
 
+    # The key's project ID, looked up once, and once at a time, for a client
+    # and its copies (with_options).
+    class ProjectLookup
+      def initialize(id)
+        @id = id
+        @lock = Mutex.new
+      end
+
+      def get
+        @id || @lock.synchronize { @id ||= yield }
+      end
+    end
+    private_constant :ProjectLookup
+
     # api_key::     A project API key ("nohead_sk_...", or "nohead_pk_..." when
     #               published-only). Defaults to NOHEAD_API_KEY.
     # base_url::    Defaults to NOHEAD_API_URL, else https://api.nohead.io.
     # project_id::  The key's project. Looked up once with GET /v1/me when omitted.
     # max_retries:: Retries of failed requests (see the README, "Retries").
-    # timeout::     Seconds per attempt.
+    # timeout::     The longest wait in seconds without progress, per attempt:
+    #               connecting, waiting for the response, and between reads
+    #               and writes of a body. A response that keeps arriving
+    #               doesn't time out.
     # headers::     Headers added to every request.
     # warnings::    Warn about deprecated operations and plan usage (once each).
+    # on_retry::    Called with a RetryEvent before each retry's wait, for
+    #               example to log it.
+    #
+    # An empty string is the same as leaving an option out.
     def initialize(api_key: nil, base_url: nil, project_id: nil, max_retries: 2, timeout: 60,
-                   headers: {}, warnings: true, transport: Transport.new)
+                   headers: {}, warnings: true, on_retry: nil, transport: Transport.new)
       @api_key = present(api_key) || present(ENV.fetch("NOHEAD_API_KEY", nil)) or
         raise Error, "Missing API key: pass api_key or set NOHEAD_API_KEY"
-      @base_url = (present(base_url) || present(ENV.fetch("NOHEAD_API_URL", nil)) ||
-                   DEFAULT_BASE_URL).chomp("/")
-      @project_id = project_id
+      @base_url = checked_base_url(present(base_url) || present(ENV.fetch("NOHEAD_API_URL", nil)) ||
+                                   DEFAULT_BASE_URL)
+      @project = ProjectLookup.new(present(project_id))
       @max_retries = max_retries
       @timeout = timeout
-      @headers = headers.to_h { |key, value| [key.to_s, value.to_s] }
+      @headers = merge_headers({}, headers.to_h)
       @warnings = warnings
+      @on_retry = on_retry
       @transport = transport
+      build_resources
+    end
 
-      @records = Resources::Records.new(self)
-      @revisions = Resources::RevisionsById.new(self)
-      @drafts = Resources::Drafts.new(self)
-      @collections = Resources::Collections.new(self)
-      @fields = Resources::Fields.new(self)
-      @migrations = Resources::Migrations.new(self)
-      @assets = Resources::Assets.new(self)
-      @webhooks = Resources::Webhooks.new(self)
-      @audit_events = Resources::AuditEvents.new(self)
-      @feature_flags = Resources::FeatureFlags.new(self)
-      @me = Resources::Me.new(self)
-      @health = Resources::Health.new(self)
+    # A copy of the client with other settings, which shares its transport
+    # and project lookup: `nohead.with_options(timeout: 5).records.get(id)`.
+    # `headers:` are added to the client's.
+    def with_options(timeout: @timeout, max_retries: @max_retries, headers: {}, on_retry: @on_retry)
+      dup.tap { |copy| copy.configure(timeout, max_retries, merge_headers(@headers, headers.to_h), on_retry) }
     end
 
     # Full-text search across the key's project (or some of its collections),
     # most relevant first, through the first 1,000 hits. `filter` takes
     # `published_at` ({ published_at: { exists: true } } for published
-    # records), as records.list does.
+    # records), as records.list does. `collections` wins over a `collection`
+    # filter.
     def search(query, collections: nil, filter: nil, limit: nil, cursor: nil)
-      filter = { collection: (collections.nil? ? nil : { in: collections }), **filter.to_h.transform_keys(&:to_sym) }
+      filter = filter.to_h.transform_keys(&:to_sym)
+      filter = filter.merge(collection: { in: collections }) unless collections.nil?
       paginate("projects_search", query: { q: query, filter: filter, limit: limit, cursor: cursor })
     end
 
-    # The API key's project, from GET /v1/me the first time.
+    # The API key's project, from GET /v1/me the first time. Threads that
+    # need it at the same time wait for one lookup.
     def project_id
-      @project_id ||= begin
+      @project.get do
         me = request("me_get")
         me.api_key or raise Error, "The credentials are not a project API key"
         me.api_key.project_id
@@ -84,9 +111,8 @@ module Nohead
     # does not wrap yet.
     def request(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
                 change_note: nil, if_match: nil)
-      NoheadObject.wrap(send_request(operation, path: path, query: query, body: body,
-                                                idempotency_key: idempotency_key,
-                                                change_note: change_note, if_match: if_match))
+      NoheadObject.wrap(exchange(operation, path: path, query: query, body: body, idempotency_key: idempotency_key,
+                                            change_note: change_note, if_match: if_match).first)
     end
 
     # A list operation as a Page that fetches the following pages as needed.
@@ -94,9 +120,12 @@ module Nohead
       params = query.dup
       cursor = params.delete(:cursor)
       fetch = lambda do |next_cursor|
-        list = send_request(operation, path: path, query: params.merge(cursor: next_cursor))
-        Page.new(NoheadObject.wrap(list.fetch("data")), NoheadObject.wrap(list.fetch("meta")),
-                 &fetch)
+        list, status = exchange(operation, path: path, query: params.merge(cursor: next_cursor))
+        unless list.is_a?(Hash) && list["data"].is_a?(Array) && list["meta"].is_a?(Hash)
+          raise Error, "The API's response could not be read (HTTP #{status})"
+        end
+
+        Page.new(NoheadObject.wrap(list["data"]), NoheadObject.wrap(list["meta"]), &fetch)
       end
       fetch.call(cursor)
     end
@@ -111,10 +140,14 @@ module Nohead
                                      headers.merge("Content-Length" => source.byte_size.to_s),
                                      source.io, @timeout)
           return response unless RETRYABLE_STATUSES.include?(response.status) && attempt < retries
-        rescue ConnectionError
+
+          failed = { status: response.status }
+        rescue ConnectionError => e
           raise if attempt >= retries
+
+          failed = { error: e }
         end
-        pause(backoff(attempt))
+        wait_to_retry(url, attempt, backoff(attempt), **failed)
         attempt += 1
         source.rewind
       end
@@ -122,10 +155,41 @@ module Nohead
 
     def inspect = "#<Nohead::Client #{@base_url}>"
 
+    protected
+
+    # with_options' settings, on its copy.
+    def configure(timeout, max_retries, headers, on_retry)
+      @timeout = timeout
+      @max_retries = max_retries
+      @headers = headers
+      @on_retry = on_retry
+    end
+
     private
 
-    def send_request(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
-                     change_note: nil, if_match: nil)
+    def initialize_copy(source)
+      super
+      build_resources # theirs send through `source`
+    end
+
+    def build_resources
+      @records = Resources::Records.new(self)
+      @revisions = Resources::RevisionsById.new(self)
+      @drafts = Resources::Drafts.new(self)
+      @collections = Resources::Collections.new(self)
+      @fields = Resources::Fields.new(self)
+      @migrations = Resources::Migrations.new(self)
+      @assets = Resources::Assets.new(self)
+      @webhooks = Resources::Webhooks.new(self)
+      @audit_events = Resources::AuditEvents.new(self)
+      @feature_flags = Resources::FeatureFlags.new(self)
+      @me = Resources::Me.new(self)
+      @health = Resources::Health.new(self)
+    end
+
+    # The parsed body of a 2xx response, and its status.
+    def exchange(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
+                 change_note: nil, if_match: nil)
       method, template = OPERATIONS.fetch(operation)
       url = build_url(template, path) + query_string(query)
       headers = request_headers(method, body, idempotency_key, change_note, if_match)
@@ -134,23 +198,23 @@ module Nohead
       loop do
         begin
           response = @transport.call(method, url, headers, payload, @timeout)
-        rescue ConnectionError
+        rescue ConnectionError => e
           raise if attempt >= @max_retries
 
-          pause(backoff(attempt))
+          wait_to_retry(url, attempt, backoff(attempt), error: e)
           attempt += 1
           next
         end
 
         warn_about(operation, response.headers)
         parsed = parse(response)
-        return parsed if response.status.between?(200, 299)
+        return [parsed, response.status] if response.status.between?(200, 299)
 
         error = Nohead.api_error(response.status, parsed, response.headers)
         delay = retry_delay(error, attempt)
         raise error if delay.nil?
 
-        pause(delay)
+        wait_to_retry(url, attempt, delay, status: response.status, error: error)
         attempt += 1
       end
     end
@@ -163,8 +227,11 @@ module Nohead
 
       values["project_id"] ||= project_id if template.include?("{project_id}")
       path = template.gsub(/\{(\w+)\}/) do
-        value = values[Regexp.last_match(1)]
-        raise Error, "Missing #{Regexp.last_match(1)}" if value.nil? || value.to_s.empty?
+        name = Regexp.last_match(1)
+        value = values[name]
+        raise Error, "Missing #{name}" if value.nil? || value.to_s.empty?
+        # Encoded, "." and ".." would still be resolved as the path's own segments.
+        raise Error, %(Invalid #{name}: "#{value}") if %w[. ..].include?(value.to_s)
 
         URI.encode_uri_component(value.to_s)
       end
@@ -209,26 +276,63 @@ module Nohead
       end
     end
 
+    # The SDK's headers, then the client's `headers:`, then the ones request
+    # options set, which win.
     def request_headers(method, body, idempotency_key, change_note, if_match)
-      headers = {
-        "Accept" => "application/json",
-        "Authorization" => "Bearer #{@api_key}",
-        "Nohead-Client" => "sdk-ruby/#{VERSION}",
-        "User-Agent" => "nohead-ruby/#{VERSION} ruby/#{RUBY_VERSION}"
-      }.merge(@headers)
-      headers["Content-Type"] = "application/json" unless body.nil?
-      headers["Idempotency-Key"] = idempotency_key || SecureRandom.uuid unless method == "GET"
-      unless if_match.nil?
-        revision = if_match.respond_to?(:revision) ? if_match.revision : if_match
-        headers["If-Match"] = %("#{revision}")
-      end
+      headers = merge_headers({
+                                "Accept" => "application/json",
+                                "Authorization" => "Bearer #{@api_key}",
+                                "Nohead-Client" => "sdk-ruby/#{VERSION}",
+                                "User-Agent" => "nohead-ruby/#{VERSION} ruby/#{RUBY_VERSION}"
+                              }, @headers)
+      options = {}
+      options["Content-Type"] = "application/json" unless body.nil?
+      options["Idempotency-Key"] = present(idempotency_key) || SecureRandom.uuid unless method == "GET"
+      options["If-Match"] = %("#{revision_of(if_match)}") unless if_match.nil?
       # Percent-encoded UTF-8, as encodeURIComponent: header values are bytes
       # (the API decodes it). Notes in other encodings are converted first.
-      if change_note
+      if present(change_note)
         note = change_note.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
-        headers["Nohead-Change-Note"] = URI.encode_uri_component(note)
+        options["Nohead-Change-Note"] = URI.encode_uri_component(note)
       end
-      headers
+      merge_headers(headers, options)
+    end
+
+    # `extra` over `headers`, matching names without regard to case, so each
+    # name is sent once.
+    def merge_headers(headers, extra)
+      extra.each_with_object(headers.dup) do |(name, value), merged|
+        name = name.to_s
+        merged.delete_if { |key, _| key.casecmp?(name) }
+        merged[name] = value.to_s
+      end
+    end
+
+    # A revision number, or a record or draft (anything with a revision, a
+    # Hash too).
+    def revision_of(if_match)
+      revision = if if_match.is_a?(Hash)
+                   if_match.key?(:revision) ? if_match[:revision] : if_match["revision"]
+                 else
+                   if_match.respond_to?(:revision) ? if_match.revision : if_match
+                 end
+      return revision if revision.is_a?(Integer)
+
+      raise ArgumentError, "if_match takes a revision number, or a record, draft or hash with a revision"
+    end
+
+    def checked_base_url(url)
+      # A loop rather than a regex, which backtracks on long runs of slashes.
+      url = url.to_s
+      stop = url.length
+      stop -= 1 while stop.positive? && url[stop - 1] == "/"
+      url = url[0, stop]
+      uri = URI.parse(url)
+      return url if %w[http https].include?(uri.scheme&.downcase) && !uri.host.to_s.empty?
+
+      raise Error, "base_url must be an http or https URL"
+    rescue URI::InvalidURIError
+      raise Error, "base_url must be an http or https URL"
     end
 
     def parse(response)
@@ -258,6 +362,11 @@ module Nohead
       [0.5 * (2**attempt), 8.0].min * (1 - (rand * 0.25))
     end
 
+    def wait_to_retry(url, attempt, delay, status: nil, error: nil)
+      @on_retry&.call(RetryEvent.new(attempt: attempt + 1, delay: delay, url: url, status: status, error: error))
+      pause(delay)
+    end
+
     def pause(seconds)
       sleep(seconds) if seconds.positive?
     end
@@ -265,7 +374,7 @@ module Nohead
     def warn_about(operation, headers)
       return unless @warnings
 
-      if headers["deprecation"] && self.class.first_warning?(operation)
+      if !headers["deprecation"].to_s.strip.empty? && self.class.first_warning?(operation)
         sunset = headers["sunset"] ? " and will be removed after #{headers['sunset']}" : ""
         link = headers["link"].to_s[/<([^>]+)>/, 1]
         warn "[nohead] #{operation} is deprecated#{sunset}#{". See #{link}" if link}"

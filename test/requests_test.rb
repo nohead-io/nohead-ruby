@@ -11,6 +11,17 @@ class RequestsTest < Minitest::Test
     assert_equal "https://api.test/v1/collections/my%20posts%2F1/records", transport.requests.first.url
   end
 
+  def test_refuses_dot_path_values
+    nohead, transport = client([json(200, record("rec_1"))])
+    %w[. ..].each do |value|
+      error = assert_raises(Nohead::Error) { nohead.records.get(value) }
+      assert_equal %(Invalid record_id: "#{value}"), error.message
+    end
+    assert_empty transport.requests
+    nohead.records.get("...")
+    assert_equal "/v1/records/...", transport.requests.first.path
+  end
+
   def test_serializes_filters_sorts_and_expansions
     nohead, transport = client([page([])])
     nohead.records.list("posts", filter: { category: "news", featured: true, views: 3,
@@ -79,6 +90,12 @@ class RequestsTest < Minitest::Test
     assert_nil keys[2]
   end
 
+  def test_an_empty_idempotency_key_is_generated
+    nohead, transport = client([json(201, record("rec_1"))])
+    nohead.records.create("posts", data: {}, idempotency_key: "")
+    assert_match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/, transport.requests.first.headers["Idempotency-Key"])
+  end
+
   def test_the_callers_idempotency_key
     nohead, transport = client([json(201, record("rec_1"))])
     nohead.records.create("posts", data: {}, idempotency_key: "import-42")
@@ -92,10 +109,54 @@ class RequestsTest < Minitest::Test
     assert_equal(['"3"', '"1"'], transport.requests.map { |request| request.headers["If-Match"] })
   end
 
+  def test_if_match_from_a_hash
+    nohead, transport = client([json(200, record("rec_1"))])
+    nohead.records.publish("rec_1", if_match: { revision: 3 })
+    nohead.records.publish("rec_1", if_match: { "revision" => 4 })
+    assert_equal(['"3"', '"4"'], transport.requests.map { |request| request.headers["If-Match"] })
+  end
+
+  def test_if_match_refuses_anything_else
+    nohead, transport = client([json(200, record("rec_1"))])
+    ["3", 3.0, {}, { revision: "3" }, Object.new].each do |if_match|
+      assert_raises(ArgumentError, if_match.inspect) { nohead.records.publish("rec_1", if_match: if_match) }
+    end
+    assert_empty transport.requests
+  end
+
+  # Each name once, whatever its case: the client's headers over the SDK's,
+  # and the ones request options set over both.
+  def test_headers_are_matched_without_regard_to_case
+    nohead, transport = client([json(201, record("rec_1"))],
+                               headers: { "accept" => "text/plain", "idempotency-key" => "theirs",
+                                          "CONTENT-TYPE" => "text/plain", :"If-match" => "x" })
+    nohead.records.create("posts", data: {}, idempotency_key: "mine", if_match: 2)
+    headers = transport.requests.first.headers
+    assert_equal headers.keys.map(&:downcase).uniq.size, headers.size
+    assert_equal "text/plain", headers.find { |name, _| name.casecmp?("accept") }.last
+    assert_equal "mine", headers["Idempotency-Key"]
+    assert_equal "application/json", headers["Content-Type"]
+    assert_equal '"2"', headers["If-Match"]
+  end
+
+  def test_numbers_json_cannot_carry_raise_before_sending
+    nohead, transport = client([json(201, record("rec_1"))])
+    [Float::NAN, Float::INFINITY].each do |number|
+      assert_raises(JSON::GeneratorError) { nohead.records.create("posts", data: { price: number }) }
+    end
+    assert_empty transport.requests
+  end
+
   def test_change_note
     nohead, transport = client([json(200, record("rec_1"))])
     nohead.records.delete("rec_1", change_note: "Duplicate")
     assert_equal "Duplicate", transport.requests.first.headers["Nohead-Change-Note"]
+  end
+
+  def test_an_empty_change_note_is_no_header
+    nohead, transport = client([json(200, record("rec_1"))])
+    nohead.records.delete("rec_1", change_note: "")
+    refute transport.requests.first.headers.key?("Nohead-Change-Note")
   end
 
   def test_change_note_in_any_language_percent_encoded

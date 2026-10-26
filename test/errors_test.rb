@@ -80,11 +80,37 @@ class ErrorsTest < Minitest::Test
     assert_equal "502 error: Request failed with status 502 (request req_9)", error.to_s
   end
 
-  def test_details_that_are_not_objects
+  def test_details_that_are_not_objects_are_kept_as_text
     detail = { "code" => "revision_mismatch", "message" => "x", "current_revision" => 7 }
-    error = failure(raw(api_error(412, "precondition_failed", {}, details: [1, nil, "x", detail])))
-    assert_equal 1, error.details.size
+    error = failure(raw(api_error(412, "precondition_failed", {}, details: [1, nil, "x", [2], detail])))
+    assert_equal([%w[unknown 1], %w[unknown null], %w[unknown x], %w[unknown [2]], %w[revision_mismatch x]],
+                 error.details.map { |item| [item.code, item.message] })
     assert_equal 7, error.current_revision
+  end
+
+  def test_the_apis_own_message
+    assert_equal "not_found message", failure(api_error(404, "not_found")).api_message
+    html = Nohead::Response.new(502, { "content-type" => "text/html" }, "<html>Bad gateway</html>")
+    assert_equal "Request failed with status 502", failure(raw(html)).api_message
+  end
+
+  # A redirect means the base URL is off (http for https, a missing path):
+  # following it could send the key somewhere else, and drops a POST's body.
+  def test_redirects_are_errors
+    moved = Nohead::Response.new(301, { "location" => "https://api.nohead.io/v1/records/rec_1" }, "")
+    nohead, transport = client([raw(moved)])
+    error = assert_raises(Nohead::APIError) { nohead.records.get("rec_1") }
+    assert_instance_of Nohead::APIError, error
+    assert_equal "redirect", error.type
+    assert_equal "301 redirect: The API answered with a redirect to https://api.nohead.io/v1/records/rec_1; " \
+                 "check the base URL", error.message
+    assert_equal "The API answered with a redirect to https://api.nohead.io/v1/records/rec_1; check the base URL",
+                 error.api_message
+    assert_equal 1, transport.requests.size
+
+    error = failure(raw(api_error(302, "not_found")))
+    assert_instance_of Nohead::APIError, error
+    assert_equal "302 redirect: The API answered with a redirect; check the base URL", error.message
   end
 
   def test_unknown_types_stay_api_errors
