@@ -52,6 +52,21 @@ class RetriesTest < Minitest::Test
     end
   end
 
+  def test_on_retry_hears_of_each_retry_before_its_wait
+    events = []
+    nohead, = client([api_error(503, "service_unavailable"), Nohead::ConnectionError.new("reset"),
+                      json(200, record("r"))], on_retry: ->(event) { events << [event, nohead.pauses.size] })
+    nohead.define_singleton_method(:rand) { 0.0 }
+    nohead.records.get("r")
+    first, second = events
+    assert_equal [1, 0.5, "https://api.test/v1/records/r", 503],
+                 first[0].to_h.values_at(:attempt, :delay, :url, :status)
+    assert_instance_of Nohead::ServiceUnavailableError, first[0].error
+    assert_equal [2, 1.0, nil], second[0].to_h.values_at(:attempt, :delay, :status)
+    assert_equal "reset", second[0].error.message
+    assert_equal [0, 1], events.map(&:last)
+  end
+
   def test_gives_up_after_the_default_two_retries
     nohead, transport = client([api_error(500, "internal_error")])
     assert_raises(Nohead::InternalServerError) { nohead.records.get("r") }

@@ -6,6 +6,13 @@ require "time"
 require "uri"
 
 module Nohead
+  # A retry about to happen, as `on_retry:` gets it: `attempt` is 1 for a
+  # request's first retry, `delay` the seconds the client waits before it,
+  # `url` the URL retried, `status` the status that failed (nil when the
+  # connection did), and `error` the APIError or ConnectionError (nil for
+  # a status from storage).
+  RetryEvent = Data.define(:attempt, :delay, :url, :status, :error)
+
   # A client for the Nohead API, authenticated with a project API key.
   #
   #   nohead = Nohead::Client.new # NOHEAD_API_KEY
@@ -45,13 +52,18 @@ module Nohead
     # base_url::    Defaults to NOHEAD_API_URL, else https://api.nohead.io.
     # project_id::  The key's project. Looked up once with GET /v1/me when omitted.
     # max_retries:: Retries of failed requests (see the README, "Retries").
-    # timeout::     Seconds per attempt.
+    # timeout::     The longest wait in seconds without progress, per attempt:
+    #               connecting, waiting for the response, and between reads
+    #               and writes of a body. A response that keeps arriving
+    #               doesn't time out.
     # headers::     Headers added to every request.
     # warnings::    Warn about deprecated operations and plan usage (once each).
+    # on_retry::    Called with a RetryEvent before each retry's wait, for
+    #               example to log it.
     #
     # An empty string is the same as leaving an option out.
     def initialize(api_key: nil, base_url: nil, project_id: nil, max_retries: 2, timeout: 60,
-                   headers: {}, warnings: true, transport: Transport.new)
+                   headers: {}, warnings: true, on_retry: nil, transport: Transport.new)
       @api_key = present(api_key) || present(ENV.fetch("NOHEAD_API_KEY", nil)) or
         raise Error, "Missing API key: pass api_key or set NOHEAD_API_KEY"
       @base_url = checked_base_url(present(base_url) || present(ENV.fetch("NOHEAD_API_URL", nil)) ||
@@ -61,20 +73,16 @@ module Nohead
       @timeout = timeout
       @headers = merge_headers({}, headers)
       @warnings = warnings
+      @on_retry = on_retry
       @transport = transport
+      build_resources
+    end
 
-      @records = Resources::Records.new(self)
-      @revisions = Resources::RevisionsById.new(self)
-      @drafts = Resources::Drafts.new(self)
-      @collections = Resources::Collections.new(self)
-      @fields = Resources::Fields.new(self)
-      @migrations = Resources::Migrations.new(self)
-      @assets = Resources::Assets.new(self)
-      @webhooks = Resources::Webhooks.new(self)
-      @audit_events = Resources::AuditEvents.new(self)
-      @feature_flags = Resources::FeatureFlags.new(self)
-      @me = Resources::Me.new(self)
-      @health = Resources::Health.new(self)
+    # A copy of the client with other settings, which shares its transport
+    # and project lookup: `nohead.with_options(timeout: 5).records.get(id)`.
+    # `headers:` are added to the client's.
+    def with_options(timeout: @timeout, max_retries: @max_retries, headers: {}, on_retry: @on_retry)
+      dup.tap { |copy| copy.configure(timeout, max_retries, merge_headers(@headers, headers), on_retry) }
     end
 
     # Full-text search across the key's project (or some of its collections),
@@ -132,10 +140,14 @@ module Nohead
                                      headers.merge("Content-Length" => source.byte_size.to_s),
                                      source.io, @timeout)
           return response unless RETRYABLE_STATUSES.include?(response.status) && attempt < retries
-        rescue ConnectionError
+
+          failed = { status: response.status }
+        rescue ConnectionError => e
           raise if attempt >= retries
+
+          failed = { error: e }
         end
-        pause(backoff(attempt))
+        wait_to_retry(url, attempt, backoff(attempt), **failed)
         attempt += 1
         source.rewind
       end
@@ -143,7 +155,37 @@ module Nohead
 
     def inspect = "#<Nohead::Client #{@base_url}>"
 
+    protected
+
+    # with_options' settings, on its copy.
+    def configure(timeout, max_retries, headers, on_retry)
+      @timeout = timeout
+      @max_retries = max_retries
+      @headers = headers
+      @on_retry = on_retry
+    end
+
     private
+
+    def initialize_copy(source)
+      super
+      build_resources # theirs send through `source`
+    end
+
+    def build_resources
+      @records = Resources::Records.new(self)
+      @revisions = Resources::RevisionsById.new(self)
+      @drafts = Resources::Drafts.new(self)
+      @collections = Resources::Collections.new(self)
+      @fields = Resources::Fields.new(self)
+      @migrations = Resources::Migrations.new(self)
+      @assets = Resources::Assets.new(self)
+      @webhooks = Resources::Webhooks.new(self)
+      @audit_events = Resources::AuditEvents.new(self)
+      @feature_flags = Resources::FeatureFlags.new(self)
+      @me = Resources::Me.new(self)
+      @health = Resources::Health.new(self)
+    end
 
     # The parsed body of a 2xx response, and its status.
     def exchange(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
@@ -156,10 +198,10 @@ module Nohead
       loop do
         begin
           response = @transport.call(method, url, headers, payload, @timeout)
-        rescue ConnectionError
+        rescue ConnectionError => e
           raise if attempt >= @max_retries
 
-          pause(backoff(attempt))
+          wait_to_retry(url, attempt, backoff(attempt), error: e)
           attempt += 1
           next
         end
@@ -172,7 +214,7 @@ module Nohead
         delay = retry_delay(error, attempt)
         raise error if delay.nil?
 
-        pause(delay)
+        wait_to_retry(url, attempt, delay, status: response.status, error: error)
         attempt += 1
       end
     end
@@ -315,6 +357,11 @@ module Nohead
     # Exponential backoff with jitter: about 0.5 s, 1 s, 2 s... up to 8 s.
     def backoff(attempt)
       [0.5 * (2**attempt), 8.0].min * (1 - (rand * 0.25))
+    end
+
+    def wait_to_retry(url, attempt, delay, status: nil, error: nil)
+      @on_retry&.call(RetryEvent.new(attempt: attempt + 1, delay: delay, url: url, status: status, error: error))
+      pause(delay)
     end
 
     def pause(seconds)

@@ -97,6 +97,16 @@ class UploadsTest < Minitest::Test
 
   # A pipe (like $stdin) can't seek: its bytes go once, and a server error is
   # the upload's failure.
+  def test_on_retry_hears_of_upload_retries
+    events = []
+    replies = [created, Nohead::Response.new(503, {}, ""), Nohead::ConnectionError.new("reset"), stored, ready]
+    nohead, = client(replies, on_retry: ->(event) { events << event })
+    nohead.assets.upload(StringIO.new("x"))
+    url = "https://storage.test/uploads/prj_1/ast_1?signature=x"
+    assert_equal([[1, url, 503, nil], [2, url, nil, "reset"]],
+                 events.map { |event| [event.attempt, event.url, event.status, event.error&.message] })
+  end
+
   def test_does_not_retry_bytes_it_cannot_read_again
     nohead, transport = client([created, Nohead::Response.new(503, {}, ""), stored, ready])
     IO.pipe do |reader, writer|

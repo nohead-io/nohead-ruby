@@ -66,6 +66,15 @@ section is its GitHub release's notes.
 - Error details that aren't objects are kept, with the code `"unknown"` and
   the value as their message, instead of left out.
 - An empty `Deprecation` header no longer warns.
+- `on_retry:`, a client option, is called before each retry's wait (of
+  uploads' bytes too) with a `Nohead::RetryEvent`: the attempt, the delay in
+  seconds, the URL, and the status or error that failed, as the other SDKs'
+  retry callbacks are.
+- `with_options(timeout:, max_retries:, headers:, on_retry:)` returns a copy
+  of the client with other settings, sharing its project lookup.
+- `timeout:` is documented as what it is: the longest wait without progress
+  (connecting, waiting for the response, between reads and writes of a
+  body), not a limit on the whole attempt.
 
 ## 0.8.0
 

@@ -56,11 +56,18 @@ nohead = Nohead::Client.new(
 | `base_url:` | `NOHEAD_API_URL`, else `https://api.nohead.io` | |
 | `project_id:` | the key's project | Looked up once with `GET /v1/me` when omitted. |
 | `max_retries:` | `2` | See [retries](#retries-and-idempotency). |
-| `timeout:` | `60` | Seconds per attempt. |
+| `timeout:` | `60` | The longest wait in seconds without progress, per attempt: connecting, waiting for the response, and between reads and writes of a body. A response that keeps arriving doesn't time out. |
 | `headers:` | `{}` | Added to every request. |
 | `warnings:` | `true` | Warns about deprecated operations and plan usage, once each. |
+| `on_retry:` | | Called before each retry's wait. See [retries](#retries-and-idempotency). |
 
 An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`). A `base_url:` that isn't `http` or `https` raises `Nohead::Error`.
+
+`with_options` gives a copy of the client with other settings (`timeout:`, `max_retries:`, `headers:`, added to the client's, and `on_retry:`), sharing its project lookup:
+
+```ruby
+nohead.with_options(timeout: 5, max_retries: 0).records.get(id)
+```
 
 API keys belong to a project, so methods like `collections.list` need no project ID. Collections can be named by ID or slug everywhere.
 
@@ -172,6 +179,12 @@ Failed requests are retried twice by default (`max_retries:`), with exponential 
 
 - what's retried: connection errors, timeouts, 429, 500, 502, 503, 504, and a 409 for a request that is still running
 - `Retry-After` (seconds, or an HTTP date) is honored up to 60 seconds; a longer one raises `RateLimitError` straight away
+
+`on_retry:` hears of each retry before its wait, uploads' too, as a `Nohead::RetryEvent` (`attempt`, from 1; `delay`, in seconds; `url`; `status`, nil when the connection failed; and `error`):
+
+```ruby
+nohead = Nohead::Client.new(on_retry: ->(event) { logger.warn("Retry #{event.attempt} of #{event.url} in #{event.delay} s") })
+```
 
 Every write gets an `Idempotency-Key` that stays the same across its retries, so a retry after a lost response never writes twice. To make a write safe across your own retries (a job that may run twice), pass a key:
 

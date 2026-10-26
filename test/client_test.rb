@@ -100,6 +100,33 @@ class ClientTest < Minitest::Test
     assert_equal(1, transport.requests.count { |request| request.path == "/v1/me" })
   end
 
+  def test_with_options_is_a_copy_with_other_settings
+    events = []
+    nohead, transport = client([api_error(500, "internal_error")], headers: { "X-A" => "1" })
+    sent = -> { transport.requests.map { |request| [request.timeout, *request.headers.values_at("x-a", "X-B")] } }
+    copy = nohead.with_options(timeout: 5, max_retries: 1, headers: { "x-a" => "2", "X-B" => "3" },
+                               on_retry: ->(event) { events << event.attempt })
+    assert_raises(Nohead::InternalServerError) { copy.records.get("rec_1") }
+    assert_equal [[5, "2", "3"]] * 2, sent.call
+    assert_equal [1], events
+
+    transport.requests.clear
+    assert_raises(Nohead::InternalServerError) { nohead.records.get("rec_1") }
+    assert_equal [[60, nil, nil]] * 3, sent.call
+    assert_equal(["1"] * 3, transport.requests.map { |request| request.headers["X-A"] })
+    assert_equal [1], events
+  end
+
+  def test_with_options_shares_the_project_lookup
+    nohead, transport = client([json(200, ME), page([])], project_id: nil)
+    copy = nohead.with_options(timeout: 5)
+    copy.collections.list
+    nohead.collections.list
+    nohead.with_options.webhooks.list
+    assert_equal ["/v1/me", "/v1/projects/prj_9/collections", "/v1/projects/prj_9/collections",
+                  "/v1/projects/prj_9/webhooks"], transport.requests.map(&:path)
+  end
+
   def test_without_a_project_key
     user = { id: "usr_1", email: "ada@example.com", name: "Ada", staff: false }
     me = { object: "principal", type: "user", user: user, api_key: nil }
