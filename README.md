@@ -352,6 +352,8 @@ gem build nohead.gemspec
 - The methods are written by hand.
 - `test/contract_test.rb` runs every call in `test/calls.rb`. It fails when an API-key operation in the contract has no method, when a query parameter is never sent (no method takes it, or no call passes it), or when a request doesn't match its operation (method, path, query parameters and JSON body, against their schemas). Each call gets an example of its operation's response, built from the contract's schema, and must return it.
 - The unit tests answer with `test/fake_transport.rb`, which checks every request to the API and every reply against `openapi.json`, so a fixture can't drift from the API. Wrap a reply that breaks the contract on purpose (a gateway's HTML page, an unknown error type) in `raw(...)`.
+- `test/network_test.rb` runs the real transport (Net::HTTP) against an HTTP server on 127.0.0.1, `test/local_server.rb`, for what goes over the wire: lengths, timeouts, redirects and broken replies.
+- A test that makes no assertions fails.
 
 The smoke test (`smoke/smoke.rb`) runs the core flow against a real API, with the gem as installed from its built package. Nohead's own CI runs it on every API contract change.
 
