@@ -71,6 +71,12 @@ class ClientTest < Minitest::Test
     assert_equal "yes", headers["X-Extra"]
   end
 
+  def test_headers_nil_is_none
+    nohead, transport = client([json(200, record("rec_1"))], headers: nil)
+    nohead.with_options(headers: nil).records.get("rec_1")
+    assert_equal "application/json", transport.requests.first.headers["Accept"]
+  end
+
   def test_version_matches_the_changelog
     assert_includes File.read(File.expand_path("../CHANGELOG.md", __dir__), encoding: "UTF-8"),
                     "## #{Nohead::VERSION}"

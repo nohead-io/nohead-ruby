@@ -71,7 +71,7 @@ module Nohead
       @project = ProjectLookup.new(present(project_id))
       @max_retries = max_retries
       @timeout = timeout
-      @headers = merge_headers({}, headers)
+      @headers = merge_headers({}, headers.to_h)
       @warnings = warnings
       @on_retry = on_retry
       @transport = transport
@@ -82,7 +82,7 @@ module Nohead
     # and project lookup: `nohead.with_options(timeout: 5).records.get(id)`.
     # `headers:` are added to the client's.
     def with_options(timeout: @timeout, max_retries: @max_retries, headers: {}, on_retry: @on_retry)
-      dup.tap { |copy| copy.configure(timeout, max_retries, merge_headers(@headers, headers), on_retry) }
+      dup.tap { |copy| copy.configure(timeout, max_retries, merge_headers(@headers, headers.to_h), on_retry) }
     end
 
     # Full-text search across the key's project (or some of its collections),
