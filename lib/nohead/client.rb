@@ -322,7 +322,11 @@ module Nohead
     end
 
     def checked_base_url(url)
-      url = url.to_s.sub(%r{/+\z}, "")
+      # A loop rather than a regex, which backtracks on long runs of slashes.
+      url = url.to_s
+      stop = url.length
+      stop -= 1 while stop.positive? && url[stop - 1] == "/"
+      url = url[0, stop]
       uri = URI.parse(url)
       return url if %w[http https].include?(uri.scheme&.downcase) && !uri.host.to_s.empty?
 
