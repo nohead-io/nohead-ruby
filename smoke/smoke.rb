@@ -11,6 +11,7 @@
 require "nohead"
 require "securerandom"
 require "stringio"
+require "tmpdir"
 
 def expect(condition, message)
   return if condition
@@ -46,7 +47,7 @@ begin
   first = nohead.records.create(collection.slug, data: { title: "One" }, idempotency_key: key)
   retried = nohead.records.create(collection.slug, data: { title: "One" }, idempotency_key: key)
   expect(retried.id == first.id, "an idempotent retry returns the same record")
-  nohead.records.create(collection.slug, data: { title: "Two" })
+  second = nohead.records.create(collection.slug, data: { title: "Two" })
 
   expect(nohead.records.get(first.id).data["title"] == "One", "get returns the record")
 
@@ -66,6 +67,15 @@ begin
   # A comma inside a value is escaped, or "Two" would match too.
   chosen = nohead.records.list(collection.slug, filter: { title: { in: ["Uno", "Two, or not"] } })
   expect(chosen.data.map { |record| record.data["title"] } == ["Uno"], "filters take operators")
+
+  # Five records at limit 2 are three pages, which each walks to the end.
+  ids = [first.id, second.id] + %w[Three Four Five].map do |title|
+    nohead.records.create(collection.slug, data: { title: title }).id
+  end
+  pages = [nohead.records.list(collection.slug, limit: 2)]
+  pages << pages.last.next_page while pages.last.next_page?
+  expect(pages.size == 3, "five records at limit 2 are three pages")
+  expect(pages.first.map(&:id).sort == ids.sort, "each walks every page, each record once")
 
   published = nohead.records.publish(first.id)
   expect(published.published_at, "publish publishes")
@@ -90,6 +100,33 @@ begin
   expect(nohead.assets.delete(asset.id).deleted_at, "assets soft-delete")
   nohead.assets.purge(asset.id)
   left.delete(:assets)
+
+  # Every kind of file upload takes: a path, an IO and a stream that can't
+  # seek (with its byte_size), each sent to storage with its length.
+  Dir.mktmpdir do |dir|
+    path = File.join(dir, "notes.txt")
+    File.binwrite(path, "from a path")
+    reader, writer = IO.pipe
+    writer.write("from a pipe, which can't seek")
+    writer.close
+    File.open(path, "rb") do |file|
+      {
+        "a path" => [path, {}, 11, "text/plain"],
+        "a File" => [file, { filename: "notes.md" }, 11, "text/markdown"],
+        "a pipe" => [reader, { filename: "piped.bin", byte_size: 29 }, 29, "application/octet-stream"]
+      }.each do |kind, (input, options, size, type)|
+        uploaded = nohead.assets.upload(input, **options)
+        left[:assets] = uploaded.id
+        expect(uploaded.status == "ready" && uploaded.byte_size == size && uploaded.content_type == type,
+               "#{kind} uploads: #{uploaded.status}, #{uploaded.byte_size} bytes, #{uploaded.content_type}")
+        nohead.assets.delete(uploaded.id)
+        nohead.assets.purge(uploaded.id)
+        left.delete(:assets)
+      end
+    end
+  ensure
+    reader&.close
+  end
 
   webhook = nohead.webhooks.create(url: "https://example.com/nohead-smoke", event_types: ["record.published"])
   left[:webhooks] = webhook.id

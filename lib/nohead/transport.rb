@@ -22,8 +22,12 @@ module Nohead
         request.body = body
       end
       # The proxy comes from the environment (http_proxy, no_proxy), as Net::HTTP.new.
+      # No retries of its own (it retries a GET, PUT or DELETE that times out
+      # or loses its connection once, and a PUT with the stream already
+      # read): the client retries, and knows when it can.
       response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: timeout,
-                                                     read_timeout: timeout, write_timeout: timeout) do |http|
+                                                     read_timeout: timeout, write_timeout: timeout,
+                                                     max_retries: 0) do |http|
         http.request(request)
       end
       Response.new(response.code.to_i, response.each_header.to_h, response.body.to_s)

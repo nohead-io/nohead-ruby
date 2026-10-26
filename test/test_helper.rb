@@ -22,6 +22,15 @@ module Clock
 end
 Time.singleton_class.prepend(Clock)
 
+# A test that made no assertions checks nothing: it fails. (assert_raises
+# and refute count; a test that already failed or was skipped is left be.)
+Minitest::Test.prepend(Module.new do
+  def after_teardown
+    super
+    flunk "#{name} made no assertions" if assertions.zero? && failures.empty?
+  end
+end)
+
 require_relative "fake_transport"
 
 module Helpers

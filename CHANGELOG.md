@@ -7,6 +7,11 @@ section is its GitHub release's notes.
 
 ## Unreleased
 
+- A request is sent once per attempt. Net::HTTP retried a GET, PUT or DELETE
+  that timed out or lost its connection once more on its own, so a stalled
+  request waited twice the `timeout:`, `max_retries:` sent more attempts than
+  asked (unseen by `on_retry:`), and a stalled upload was sent again with its
+  stream already read.
 - `Images.url` writes the same URL as the other SDKs for the same image and
   options: a whole-number Float is written as an integer (`dpr: 2.0` is
   `dpr:2`, not `dpr:2.0`), and `dpr: 0` or `quality: 0` is left out rather
