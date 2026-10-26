@@ -75,6 +75,16 @@ section is its GitHub release's notes.
 - `timeout:` is documented as what it is: the longest wait without progress
   (connecting, waiting for the response, between reads and writes of a
   body), not a limit on the whole attempt.
+- `assets.upload` raises `UploadError` ("Could not upload a.png: <reason>",
+  with the `ConnectionError` as its `cause`) when storage can't be reached
+  or times out, as it does when storage refuses the bytes, instead of
+  `ConnectionError` or `TimeoutError`.
+- `assets.upload` with `filename: ""` or `content_type: ""` uses the
+  defaults (the file's name, else `upload`; the extension's type, else
+  `application/octet-stream`) instead of sending them empty.
+- `Images.url` leaves out options given as `""` (`gravity: ""`,
+  `format: ""`...) instead of writing `g:` or a trailing `@`, and `fit: nil`
+  (or `""`) means the default `contain` instead of raising `ArgumentError`.
 
 ## 0.8.0
 

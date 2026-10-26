@@ -234,7 +234,7 @@ Thumbnails: an image's `preview_url` fits in 640×640, as WebP.
 2. Streams the bytes straight to storage.
 3. Completes the upload, which checks the file, and returns the `ready` asset.
 
-**Errors:** `UploadError` if storage refuses the bytes; `ValidationError` if the file fails the checks.
+**Errors:** `UploadError` if the bytes don't reach storage: refused (`Storage refused the upload of cover.jpg (403)`, with its `status`), or unreachable or timed out (`Could not upload cover.jpg: …`, with the `ConnectionError` as its `cause`). `ValidationError` if the file fails the checks.
 
 **Resuming:** with an `idempotency_key:`, running the same upload again resumes it: the key starts the upload, and an asset that is already `ready` comes back without sending the bytes again. Once the upload's URL has expired (its `upload.expires_at`), it raises `UploadError`: start over with a new key.
 

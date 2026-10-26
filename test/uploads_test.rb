@@ -80,6 +80,21 @@ class UploadsTest < Minitest::Test
                    "byte_size" => 10 }, transport.requests.first.json)
   end
 
+  def test_an_empty_filename_or_content_type_is_the_default
+    nohead, transport = client([created, stored, ready])
+    nohead.assets.upload(StringIO.new("x"), filename: "", content_type: "")
+    assert_equal({ "filename" => "upload", "content_type" => "application/octet-stream", "byte_size" => 1 },
+                 transport.requests.first.json)
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "a.png")
+      File.binwrite(path, "x")
+      nohead, transport = client([created, stored, ready])
+      nohead.assets.upload(path, filename: "", content_type: "")
+      assert_equal({ "filename" => "a.png", "content_type" => "image/png", "byte_size" => 1 },
+                   transport.requests.first.json)
+    end
+  end
+
   def test_needs_byte_size_for_a_stream
     nohead, = client([created])
     IO.pipe do |reader, _writer|
@@ -145,10 +160,23 @@ class UploadsTest < Minitest::Test
     assert_equal %w[POST PUT PUT PUT], transport.requests.map(&:method)
   end
 
+  def test_storage_out_of_reach
+    [Nohead::ConnectionError.new("Could not reach storage.test: refused"),
+     Nohead::TimeoutError.new("The request to storage.test timed out after 60 s")].each do |failure|
+      nohead, transport = client([created, failure])
+      error = assert_raises(Nohead::UploadError) { nohead.assets.upload(StringIO.new("x"), filename: "a.png") }
+      assert_equal "Could not upload a.png: #{failure.message}", error.message
+      assert_same failure, error.cause
+      assert_nil error.status
+      assert_equal %w[POST PUT PUT PUT], transport.requests.map(&:method)
+    end
+  end
+
   def test_storage_refusing_the_bytes
     nohead, = client([created, Nohead::Response.new(403, {}, "denied")])
-    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(StringIO.new("x")) }
+    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(StringIO.new("x"), filename: "a.png") }
     assert_equal 403, error.status
+    assert_equal "Storage refused the upload of a.png (403)", error.message
   end
 
   def test_does_not_follow_a_redirect_from_storage

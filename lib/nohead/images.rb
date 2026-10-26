@@ -13,12 +13,14 @@ module Nohead
     module_function
 
     # A rendition of an image (an asset, as an object or a Hash, or its `image_url`). fit: "contain"
-    # fits inside the box, "cover" fills it, cropping, "fill" stretches to it.
+    # (the default, also for nil) fits inside the box, "cover" fills it, cropping, "fill" stretches to it.
     # gravity: is what a crop keeps ("sm" for smart, "fp:0.5:0.3" for a focal
     # point); options: any other processing options, as written in a URL
-    # (["bl:2"]).
+    # (["bl:2"]). An empty string is the same as leaving an option out.
     def url(image, width: nil, height: nil, fit: "contain", format: nil, quality: nil, dpr: nil,
             gravity: nil, options: [])
+      gravity, format = [gravity, format].map { |value| value unless value.to_s.empty? }
+      options = [*options].reject { |option| option.to_s.empty? }
       base = base_of(image)
       check_options([gravity, *options])
       at = base.index("/plain/")
@@ -31,13 +33,15 @@ module Nohead
 
     # rs:<fit>:<width>:<height>, or nothing without a size.
     def resize(fit, width, height)
-      type = FITS.fetch(fit.to_s) { raise ArgumentError, "fit must be one of #{FITS.keys.join(', ')}" }
+      fit = fit.to_s.empty? ? "contain" : fit.to_s
+      type = FITS.fetch(fit) { raise ArgumentError, "fit must be one of #{FITS.keys.join(', ')}" }
       "rs:#{type}:#{width || 0}:#{height || 0}" if width || height
     end
     private_class_method :resize
 
-    # A number as the other SDKs write it (2.0 is 2), or nil for none (0 is none).
+    # A number as the other SDKs write it (2.0 is 2), or nil for none (0 and "" are none).
     def number(value)
+      return nil if value == ""
       return value unless value.is_a?(Numeric)
       return nil if value.zero?
 

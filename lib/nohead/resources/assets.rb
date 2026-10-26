@@ -7,8 +7,9 @@ module Nohead
       # Uploads a file and returns the `ready` asset: creates the upload, sends
       # the bytes straight to storage, then completes it (which checks the
       # file). `file` is a path or an IO; for bytes, pass StringIO.new(bytes).
-      # Raises UploadError if storage refuses the bytes, and ValidationError if
-      # the file fails the checks.
+      # Raises UploadError if the bytes don't reach storage (it refuses them,
+      # can't be reached or times out, with the ConnectionError as its
+      # `cause`), and ValidationError if the file fails the checks.
       #
       # With an `idempotency_key`, running the same upload again resumes it:
       # the key starts the upload, and an asset that is already `ready` is
@@ -31,7 +32,11 @@ module Nohead
             end
           end
           upload = created.upload
-          response = @client.put_upload(upload.url, upload["method"], upload.headers.to_h, source)
+          response = begin
+            @client.put_upload(upload.url, upload["method"], upload.headers.to_h, source)
+          rescue ConnectionError => e
+            raise UploadError, "Could not upload #{source.filename}: #{e.message}"
+          end
         ensure
           source.close
         end
