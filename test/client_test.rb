@@ -29,6 +29,30 @@ class ClientTest < Minitest::Test
     end
   end
 
+  def test_empty_options_are_unset
+    with_env("NOHEAD_API_KEY" => "nohead_sk_env", "NOHEAD_API_URL" => "https://env.test") do
+      transport = FakeTransport.new([json(200, ME), page([])])
+      Nohead::Client.new(api_key: "", base_url: "", project_id: "", transport: transport).collections.list
+      assert_equal(%w[https://env.test/v1/me https://env.test/v1/projects/prj_9/collections],
+                   transport.requests.map(&:url))
+      assert_equal "Bearer nohead_sk_env", transport.requests.first.headers["Authorization"]
+    end
+  end
+
+  def test_removes_every_trailing_slash
+    nohead, transport = client([json(200, record("rec_1"))], base_url: "https://api.test/api//")
+    nohead.records.get("rec_1")
+    assert_equal "https://api.test/api/v1/records/rec_1", transport.requests.first.url
+  end
+
+  def test_refuses_a_base_url_that_is_not_http
+    ["ftp://api.test", "api.test", "https:", "https://api test", "mailto:a@b.test"].each do |url|
+      error = assert_raises(Nohead::Error, url) { Nohead::Client.new(api_key: "nohead_sk_x", base_url: url) }
+      assert_equal "base_url must be an http or https URL", error.message
+    end
+    assert Nohead::Client.new(api_key: "nohead_sk_x", base_url: "HTTP://localhost:3000")
+  end
+
   def test_defaults_to_production
     with_env("NOHEAD_API_URL" => "") do
       transport = FakeTransport.new([json(200, record("rec_1"))])
@@ -62,6 +86,18 @@ class ClientTest < Minitest::Test
     nohead.webhooks.list
     assert_equal ["/v1/me", "/v1/projects/prj_9/collections", "/v1/projects/prj_9/webhooks"],
                  transport.requests.map(&:path)
+  end
+
+  def test_looks_up_the_project_once_for_threads_at_the_same_time
+    me = lambda do |request|
+      next page([]) unless request.path == "/v1/me"
+
+      sleep 0.05 # long enough for every thread to need it
+      json(200, ME)
+    end
+    nohead, transport = client([me], project_id: nil)
+    Array.new(5) { Thread.new { nohead.collections.list } }.each(&:join)
+    assert_equal(1, transport.requests.count { |request| request.path == "/v1/me" })
   end
 
   def test_without_a_project_key

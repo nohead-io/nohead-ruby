@@ -26,6 +26,29 @@ section is its GitHub release's notes.
   `WebhookVerificationError` ("The webhook secret is empty"), instead of
   `NoMethodError` or a signature mismatch, and verifies a repeated
   `webhook-signature` header given as an Array.
+- A path value of `"."` or `".."` (an ID such as `records.get(".")`) raises
+  `Nohead::Error` (`Invalid record_id: "."`) before anything is sent, as
+  `nil` or `""` does, instead of reaching a URL that a proxy could resolve to
+  another path.
+- An empty string is the same as leaving an option out, as in the other
+  SDKs: `project_id: ""` looks the project up, `idempotency_key: ""`
+  generates a key (it was sent empty) and `change_note: ""` sends no
+  `Nohead-Change-Note` header.
+- `base_url:` loses every trailing slash (it lost one), and a base URL that
+  isn't `http` or `https` raises `Nohead::Error` ("base_url must be an http or
+  https URL") when the client is built, instead of `NoMethodError` at the
+  first request.
+- Headers are sent once per name, whatever its case: the client's
+  `headers:` replace the SDK's own, and the ones request options set
+  (`Content-Type`, `Idempotency-Key`, `If-Match`, `Nohead-Change-Note`)
+  replace both. A custom `transport:` used to get both spellings.
+- `if_match:` takes a Hash with a revision (`{ revision: 3 }`) as well as a
+  revision number or a record or draft; anything else, such as `"3"`, raises
+  `ArgumentError` (a Hash or String was sent as it was written).
+- The project lookup (`GET /v1/me`, without `project_id:`) runs once when
+  several threads need it at the same time.
+- `search` with both `collections:` and a `collection` filter searches
+  `collections:`, as the other SDKs do (the filter won).
 
 ## 0.8.0
 

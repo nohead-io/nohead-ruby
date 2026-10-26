@@ -91,4 +91,13 @@ class PaginationTest < Minitest::Test
     assert_equal "posts,pages", transport.requests.first.params["filter[collection][in]"]
     assert_equal "true", transport.requests.first.params["filter[published_at][exists]"]
   end
+
+  def test_search_collections_win_over_a_collection_filter
+    nohead, transport = client([page([], total_estimate: 0)])
+    nohead.search("hello", collections: ["posts"], filter: { "collection" => "pages" }).data
+    nohead.search("hello", filter: { collection: "pages" }).data
+    first, second = transport.requests.map(&:params)
+    assert_equal({ "q" => "hello", "filter[collection][in]" => "posts" }, first)
+    assert_equal({ "q" => "hello", "filter[collection]" => "pages" }, second)
+  end
 end

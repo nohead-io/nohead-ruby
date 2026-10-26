@@ -60,6 +60,8 @@ nohead = Nohead::Client.new(
 | `headers:` | `{}` | Added to every request. |
 | `warnings:` | `true` | Warns about deprecated operations and plan usage, once each. |
 
+An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`). A `base_url:` that isn't `http` or `https` raises `Nohead::Error`.
+
 API keys belong to a project, so methods like `collections.list` need no project ID. Collections can be named by ID or slug everywhere.
 
 ## Records
@@ -190,7 +192,7 @@ rescue Nohead::PreconditionFailedError => e
 end
 ```
 
-`if_match:` takes a record (or draft) or a revision number, on `records.update`, `delete`, `restore`, `publish`, `unpublish` and `revisions.revert`, and on `drafts.update`, `discard` and `merge`.
+`if_match:` takes a record (or draft), a revision number or `{ revision: 3 }`, on `records.update`, `delete`, `restore`, `publish`, `unpublish` and `revisions.revert`, and on `drafts.update`, `discard` and `merge`.
 
 ## Assets
 

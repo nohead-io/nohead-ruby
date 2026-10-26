@@ -26,6 +26,20 @@ module Nohead
     attr_reader :records, :revisions, :drafts, :collections, :fields, :migrations, :assets, :webhooks,
                 :audit_events, :feature_flags, :me, :health
 
+    # The key's project ID, looked up once, and once at a time, for a client
+    # and its copies (with_options).
+    class ProjectLookup
+      def initialize(id)
+        @id = id
+        @lock = Mutex.new
+      end
+
+      def get
+        @id || @lock.synchronize { @id ||= yield }
+      end
+    end
+    private_constant :ProjectLookup
+
     # api_key::     A project API key ("nohead_sk_...", or "nohead_pk_..." when
     #               published-only). Defaults to NOHEAD_API_KEY.
     # base_url::    Defaults to NOHEAD_API_URL, else https://api.nohead.io.
@@ -34,16 +48,18 @@ module Nohead
     # timeout::     Seconds per attempt.
     # headers::     Headers added to every request.
     # warnings::    Warn about deprecated operations and plan usage (once each).
+    #
+    # An empty string is the same as leaving an option out.
     def initialize(api_key: nil, base_url: nil, project_id: nil, max_retries: 2, timeout: 60,
                    headers: {}, warnings: true, transport: Transport.new)
       @api_key = present(api_key) || present(ENV.fetch("NOHEAD_API_KEY", nil)) or
         raise Error, "Missing API key: pass api_key or set NOHEAD_API_KEY"
-      @base_url = (present(base_url) || present(ENV.fetch("NOHEAD_API_URL", nil)) ||
-                   DEFAULT_BASE_URL).chomp("/")
-      @project_id = project_id
+      @base_url = checked_base_url(present(base_url) || present(ENV.fetch("NOHEAD_API_URL", nil)) ||
+                                   DEFAULT_BASE_URL)
+      @project = ProjectLookup.new(present(project_id))
       @max_retries = max_retries
       @timeout = timeout
-      @headers = headers.to_h { |key, value| [key.to_s, value.to_s] }
+      @headers = merge_headers({}, headers)
       @warnings = warnings
       @transport = transport
 
@@ -64,15 +80,18 @@ module Nohead
     # Full-text search across the key's project (or some of its collections),
     # most relevant first, through the first 1,000 hits. `filter` takes
     # `published_at` ({ published_at: { exists: true } } for published
-    # records), as records.list does.
+    # records), as records.list does. `collections` wins over a `collection`
+    # filter.
     def search(query, collections: nil, filter: nil, limit: nil, cursor: nil)
-      filter = { collection: (collections.nil? ? nil : { in: collections }), **filter.to_h.transform_keys(&:to_sym) }
+      filter = filter.to_h.transform_keys(&:to_sym)
+      filter = filter.merge(collection: { in: collections }) unless collections.nil?
       paginate("projects_search", query: { q: query, filter: filter, limit: limit, cursor: cursor })
     end
 
-    # The API key's project, from GET /v1/me the first time.
+    # The API key's project, from GET /v1/me the first time. Threads that
+    # need it at the same time wait for one lookup.
     def project_id
-      @project_id ||= begin
+      @project.get do
         me = request("me_get")
         me.api_key or raise Error, "The credentials are not a project API key"
         me.api_key.project_id
@@ -163,8 +182,11 @@ module Nohead
 
       values["project_id"] ||= project_id if template.include?("{project_id}")
       path = template.gsub(/\{(\w+)\}/) do
-        value = values[Regexp.last_match(1)]
-        raise Error, "Missing #{Regexp.last_match(1)}" if value.nil? || value.to_s.empty?
+        name = Regexp.last_match(1)
+        value = values[name]
+        raise Error, "Missing #{name}" if value.nil? || value.to_s.empty?
+        # Encoded, "." and ".." would still be resolved as the path's own segments.
+        raise Error, %(Invalid #{name}: "#{value}") if %w[. ..].include?(value.to_s)
 
         URI.encode_uri_component(value.to_s)
       end
@@ -209,26 +231,60 @@ module Nohead
       end
     end
 
+    # The SDK's headers, then the client's `headers:`, then the ones request
+    # options set, which win.
     def request_headers(method, body, idempotency_key, change_note, if_match)
-      headers = {
-        "Accept" => "application/json",
-        "Authorization" => "Bearer #{@api_key}",
-        "Nohead-Client" => "sdk-ruby/#{VERSION}",
-        "User-Agent" => "nohead-ruby/#{VERSION} ruby/#{RUBY_VERSION}"
-      }.merge(@headers)
-      headers["Content-Type"] = "application/json" unless body.nil?
-      headers["Idempotency-Key"] = idempotency_key || SecureRandom.uuid unless method == "GET"
-      unless if_match.nil?
-        revision = if_match.respond_to?(:revision) ? if_match.revision : if_match
-        headers["If-Match"] = %("#{revision}")
-      end
+      headers = merge_headers({
+                                "Accept" => "application/json",
+                                "Authorization" => "Bearer #{@api_key}",
+                                "Nohead-Client" => "sdk-ruby/#{VERSION}",
+                                "User-Agent" => "nohead-ruby/#{VERSION} ruby/#{RUBY_VERSION}"
+                              }, @headers)
+      options = {}
+      options["Content-Type"] = "application/json" unless body.nil?
+      options["Idempotency-Key"] = present(idempotency_key) || SecureRandom.uuid unless method == "GET"
+      options["If-Match"] = %("#{revision_of(if_match)}") unless if_match.nil?
       # Percent-encoded UTF-8, as encodeURIComponent: header values are bytes
       # (the API decodes it). Notes in other encodings are converted first.
-      if change_note
+      if present(change_note)
         note = change_note.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
-        headers["Nohead-Change-Note"] = URI.encode_uri_component(note)
+        options["Nohead-Change-Note"] = URI.encode_uri_component(note)
       end
-      headers
+      merge_headers(headers, options)
+    end
+
+    # `extra` over `headers`, matching names without regard to case, so each
+    # name is sent once.
+    def merge_headers(headers, extra)
+      extra.each_with_object(headers.dup) do |(name, value), merged|
+        name = name.to_s
+        merged.delete_if { |key, _| key.casecmp?(name) }
+        merged[name] = value.to_s
+      end
+    end
+
+    # A revision number, or a record or draft (anything with a revision, a
+    # Hash too).
+    def revision_of(if_match)
+      revision = if if_match.is_a?(Hash)
+                   if_match.key?(:revision) ? if_match[:revision] : if_match["revision"]
+                 else
+                   if_match.respond_to?(:revision) ? if_match.revision : if_match
+                 end
+      return revision if revision.is_a?(Integer)
+
+      raise ArgumentError, "if_match takes a revision number, or a record or draft (or { revision: 3 }), " \
+                           "not #{if_match.inspect}"
+    end
+
+    def checked_base_url(url)
+      url = url.to_s.sub(%r{/+\z}, "")
+      uri = URI.parse(url)
+      return url if %w[http https].include?(uri.scheme&.downcase) && !uri.host.to_s.empty?
+
+      raise Error, "base_url must be an http or https URL"
+    rescue URI::InvalidURIError
+      raise Error, "base_url must be an http or https URL"
     end
 
     def parse(response)
