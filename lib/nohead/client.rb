@@ -103,9 +103,8 @@ module Nohead
     # does not wrap yet.
     def request(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
                 change_note: nil, if_match: nil)
-      NoheadObject.wrap(send_request(operation, path: path, query: query, body: body,
-                                                idempotency_key: idempotency_key,
-                                                change_note: change_note, if_match: if_match))
+      NoheadObject.wrap(exchange(operation, path: path, query: query, body: body, idempotency_key: idempotency_key,
+                                            change_note: change_note, if_match: if_match).first)
     end
 
     # A list operation as a Page that fetches the following pages as needed.
@@ -113,9 +112,12 @@ module Nohead
       params = query.dup
       cursor = params.delete(:cursor)
       fetch = lambda do |next_cursor|
-        list = send_request(operation, path: path, query: params.merge(cursor: next_cursor))
-        Page.new(NoheadObject.wrap(list.fetch("data")), NoheadObject.wrap(list.fetch("meta")),
-                 &fetch)
+        list, status = exchange(operation, path: path, query: params.merge(cursor: next_cursor))
+        unless list.is_a?(Hash) && list["data"].is_a?(Array) && list["meta"].is_a?(Hash)
+          raise Error, "The API's response could not be read (HTTP #{status})"
+        end
+
+        Page.new(NoheadObject.wrap(list["data"]), NoheadObject.wrap(list["meta"]), &fetch)
       end
       fetch.call(cursor)
     end
@@ -143,8 +145,9 @@ module Nohead
 
     private
 
-    def send_request(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
-                     change_note: nil, if_match: nil)
+    # The parsed body of a 2xx response, and its status.
+    def exchange(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
+                 change_note: nil, if_match: nil)
       method, template = OPERATIONS.fetch(operation)
       url = build_url(template, path) + query_string(query)
       headers = request_headers(method, body, idempotency_key, change_note, if_match)
@@ -163,7 +166,7 @@ module Nohead
 
         warn_about(operation, response.headers)
         parsed = parse(response)
-        return parsed if response.status.between?(200, 299)
+        return [parsed, response.status] if response.status.between?(200, 299)
 
         error = Nohead.api_error(response.status, parsed, response.headers)
         delay = retry_delay(error, attempt)
@@ -321,7 +324,7 @@ module Nohead
     def warn_about(operation, headers)
       return unless @warnings
 
-      if headers["deprecation"] && self.class.first_warning?(operation)
+      if !headers["deprecation"].to_s.strip.empty? && self.class.first_warning?(operation)
         sunset = headers["sunset"] ? " and will be removed after #{headers['sunset']}" : ""
         link = headers["link"].to_s[/<([^>]+)>/, 1]
         warn "[nohead] #{operation} is deprecated#{sunset}#{". See #{link}" if link}"

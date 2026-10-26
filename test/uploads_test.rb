@@ -141,6 +141,14 @@ class UploadsTest < Minitest::Test
     assert_equal 403, error.status
   end
 
+  def test_does_not_follow_a_redirect_from_storage
+    moved = Nohead::Response.new(307, { "location" => "https://elsewhere.test/" }, "")
+    nohead, transport = client([created, moved, stored, ready])
+    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(StringIO.new("x")) }
+    assert_equal 307, error.status
+    assert_equal %w[POST PUT], transport.requests.map(&:method)
+  end
+
   def test_a_file_that_fails_the_checks
     nohead, = client([created, stored, api_error(422, "validation_error")], max_retries: 0)
     assert_raises(Nohead::ValidationError) { nohead.assets.upload(StringIO.new("x")) }

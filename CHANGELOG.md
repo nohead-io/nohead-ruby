@@ -49,6 +49,23 @@ section is its GitHub release's notes.
   several threads need it at the same time.
 - `search` with both `collections:` and a `collection` filter searches
   `collections:`, as the other SDKs do (the filter won).
+- `APIError#api_message` is the API's own message, without the status, type
+  and request ID that `message` adds.
+- A redirect is an `APIError` whose message says to check the base URL
+  (`301 redirect: The API answered with a redirect to <Location>; check the
+  base URL`), instead of "Request failed with status 301".
+- A malformed response (a broken status line or header,
+  `Net::HTTPBadResponse`, `Net::HTTPHeaderSyntaxError`, `Net::ProtocolError`,
+  or a broken compressed body) is a `ConnectionError`, retried like a
+  dropped connection, instead of escaping as Net::HTTP's own error.
+- A list call whose response isn't a page raises `Nohead::Error` ("The API's
+  response could not be read (HTTP 200)") instead of `KeyError` or
+  `NoMethodError`.
+- `Retry-After` is read with spaces around it (`" 5"`); anything but whole or
+  decimal seconds or an HTTP date is ignored, as before.
+- Error details that aren't objects are kept, with the code `"unknown"` and
+  the value as their message, instead of left out.
+- An empty `Deprecation` header no longer warns.
 
 ## 0.8.0
 

@@ -134,7 +134,7 @@ nohead.records.list("products", filter: { price: { lt: 50 }, category: { in: %w[
 
 ## Errors
 
-Every error is a `Nohead::Error`. API errors are `Nohead::APIError`s with `status`, `type`, `message`, `request_id`, `details` and `headers`, in a class per type:
+Every error is a `Nohead::Error`. API errors are `Nohead::APIError`s with `status`, `type`, `message`, `api_message` (the API's own message, without the status, type and request ID), `request_id`, `details` and `headers`, in a class per type:
 
 | Class | Status |
 |---|---|
@@ -149,6 +149,8 @@ Every error is a `Nohead::Error`. API errors are `Nohead::APIError`s with `statu
 | `RateLimitError` | 429 (`retry_after`) |
 | `InternalServerError` | 500 and other 5xx |
 | `ServiceUnavailableError` | 503 |
+
+A redirect is an `APIError` too ("301 redirect: The API answered with a redirect to …; check the base URL"): the SDK doesn't follow redirects.
 
 Other errors:
 
@@ -169,7 +171,7 @@ end
 Failed requests are retried twice by default (`max_retries:`), with exponential backoff:
 
 - what's retried: connection errors, timeouts, 429, 500, 502, 503, 504, and a 409 for a request that is still running
-- `Retry-After` is honored up to 60 seconds; a longer one raises `RateLimitError` straight away
+- `Retry-After` (seconds, or an HTTP date) is honored up to 60 seconds; a longer one raises `RateLimitError` straight away
 
 Every write gets an `Idempotency-Key` that stays the same across its retries, so a retry after a lost response never writes twice. To make a write safe across your own retries (a job that may run twice), pass a key:
 

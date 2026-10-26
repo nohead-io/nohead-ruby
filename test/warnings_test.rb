@@ -43,6 +43,13 @@ class WarningsTest < Minitest::Test
     assert_equal ["[nohead] records_get is deprecated"], lines
   end
 
+  def test_an_empty_deprecation_header_is_no_deprecation
+    lines = warnings([json(200, record("rec_1"), { "deprecation" => "" })]) do |nohead|
+      nohead.records.get("rec_1")
+    end
+    assert_empty lines
+  end
+
   def test_warns_once_about_usage
     lines = warnings([json(200, record("rec_1"), OVER)]) do |nohead|
       nohead.records.get("rec_1")

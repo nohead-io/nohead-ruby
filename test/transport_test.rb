@@ -79,6 +79,16 @@ class TransportTest < Minitest::Test
     end
   end
 
+  def test_malformed_responses_raise_connection_error
+    [Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, Zlib::DataError].each do |error|
+      offline(->(_) { raise error, "wrong status line" }) do
+        raised = assert_raises(Nohead::ConnectionError, error.name) { send_request }
+        refute_kind_of Nohead::TimeoutError, raised
+        assert_equal "The response from api.test could not be read: wrong status line", raised.message
+      end
+    end
+  end
+
   def test_unreachable_hosts_raise_connection_error
     [Errno::ECONNREFUSED, SocketError].each do |error|
       offline(->(_) { raise error }) do

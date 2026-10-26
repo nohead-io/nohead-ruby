@@ -83,6 +83,15 @@ class PaginationTest < Minitest::Test
     assert_empty transport.requests[2].params.keys.grep(/content_type/)
   end
 
+  def test_a_list_response_that_is_not_a_page
+    [json(200, [1]), Nohead::Response.new(200, { "content-type" => "text/html" }, "<html>Hi</html>"),
+     json(200, { data: nil, meta: {} }), json(200, { data: [] })].each do |reply|
+      nohead, = client([raw(reply)])
+      error = assert_raises(Nohead::Error) { nohead.records.list("posts") }
+      assert_equal "The API's response could not be read (HTTP 200)", error.message
+    end
+  end
+
   def test_search_totals
     nohead, transport = client([page([record("r")], total_estimate: 1)])
     hits = nohead.search("hello", collections: %w[posts pages], filter: { published_at: { exists: true } })
