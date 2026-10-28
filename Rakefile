@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "bundler/gem_tasks" # rake release, used by .github/workflows/release.yml
 require "minitest/test_task"
 
 Minitest::TestTask.create(:test) do |task|
