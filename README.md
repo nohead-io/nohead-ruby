@@ -359,7 +359,7 @@ The smoke test (`smoke/smoke.rb`) runs the core flow against a real API, with th
 
 ## Releasing
 
-1. Bump `lib/nohead/version.rb`.
+1. Bump `lib/nohead/version.rb`, then `bundle install` (`Gemfile.lock` records the version, and CI installs frozen).
 2. Add a section for the version to `CHANGELOG.md` (`## 1.2.3`), which becomes the release's notes.
 3. Merge to `main`. Its ruleset requires the **CI passed** check, so the commit goes through a pull request or a branch whose CI passed, and force pushes are refused.
 4. Run the **SDK release** workflow in the Nohead API repository. It runs this commit's smoke test against the API and pushes the tag `v1.2.3`. Nobody else can push `v*` tags: a tag ruleset lets only that workflow's deploy key through.
