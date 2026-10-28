@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "bundler/gem_tasks" # rake build and install, to try the gem locally (release.yml uses gem build/push)
 require "minitest/test_task"
 
 Minitest::TestTask.create(:test) do |task|
