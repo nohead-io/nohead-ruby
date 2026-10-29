@@ -215,7 +215,6 @@ end
 ```ruby
 asset = nohead.assets.upload("cover.jpg")
 nohead.records.update(id, data: { cover: asset.id })
-
 ```
 
 **Images.** Image URLs are open: an image's `image_url` serves the whole image, and any of [imgproxy's processing options](https://docs.imgproxy.net/usage/processing) written into it transform it. `Nohead::Images.url` builds them without a request:
@@ -239,13 +238,13 @@ Thumbnails: an image's `preview_url` fits in 640×640, as WebP.
 
 **Resuming:** with an `idempotency_key:`, running the same upload again resumes it: the key starts the upload, and an asset that is already `ready` comes back without sending the bytes again. Once the upload's URL has expired (its `upload.expires_at`), it raises `UploadError`: start over with a new key.
 
-**Uploading from a browser:** create the upload on your server with `create_upload`, `PUT` the file from the browser, then `complete` it.
-
 **Renaming and alt text:** `update` changes an asset's `filename:` and `alt:` text, the default wherever the asset is used (`expand:` returns it with the asset). The file itself never changes.
 
 ```ruby
 nohead.assets.update(asset.id, alt: "The spring menu, on a chalkboard")
 ```
+
+**Deleting:** `usage` shows which records use an asset. `delete` keeps the file until its `purge_after`, during which `restore` undoes it; `purge` removes a deleted asset for good, now.
 
 ## Search
 
