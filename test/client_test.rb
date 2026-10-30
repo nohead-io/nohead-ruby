@@ -19,21 +19,30 @@ class ClientTest < Minitest::Test
     end
   end
 
-  def test_reads_the_environment
+  def test_reads_the_key_from_the_environment_but_not_the_url
     with_env("NOHEAD_API_KEY" => "nohead_sk_env", "NOHEAD_API_URL" => "https://env.test/") do
       transport = FakeTransport.new([json(200, record("rec_1"))])
       Nohead::Client.new(transport: transport).records.get("rec_1")
       request = transport.requests.first
-      assert_equal "https://env.test/v1/records/rec_1", request.url
+      assert_equal "https://api.nohead.io/v1/records/rec_1", request.url
       assert_equal "Bearer nohead_sk_env", request.headers["Authorization"]
     end
   end
 
+  def test_takes_the_base_url_from_its_option
+    with_env("NOHEAD_API_URL" => "https://env.test") do
+      transport = FakeTransport.new([json(200, record("rec_1"))])
+      Nohead::Client.new(api_key: "nohead_sk_x", base_url: "https://option.test", transport: transport)
+                    .records.get("rec_1")
+      assert_equal "https://option.test/v1/records/rec_1", transport.requests.first.url
+    end
+  end
+
   def test_empty_options_are_unset
-    with_env("NOHEAD_API_KEY" => "nohead_sk_env", "NOHEAD_API_URL" => "https://env.test") do
+    with_env("NOHEAD_API_KEY" => "nohead_sk_env") do
       transport = FakeTransport.new([json(200, ME), page([])])
       Nohead::Client.new(api_key: "", base_url: "", project_id: "", transport: transport).collections.list
-      assert_equal(%w[https://env.test/v1/me https://env.test/v1/projects/prj_9/collections],
+      assert_equal(%w[https://api.nohead.io/v1/me https://api.nohead.io/v1/projects/prj_9/collections],
                    transport.requests.map(&:url))
       assert_equal "Bearer nohead_sk_env", transport.requests.first.headers["Authorization"]
     end
@@ -54,11 +63,9 @@ class ClientTest < Minitest::Test
   end
 
   def test_defaults_to_production
-    with_env("NOHEAD_API_URL" => "") do
-      transport = FakeTransport.new([json(200, record("rec_1"))])
-      Nohead::Client.new(api_key: "nohead_sk_x", transport: transport).records.get("rec_1")
-      assert_equal "https://api.nohead.io/v1/records/rec_1", transport.requests.first.url
-    end
+    transport = FakeTransport.new([json(200, record("rec_1"))])
+    Nohead::Client.new(api_key: "nohead_sk_x", transport: transport).records.get("rec_1")
+    assert_equal "https://api.nohead.io/v1/records/rec_1", transport.requests.first.url
   end
 
   def test_identifies_itself

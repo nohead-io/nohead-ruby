@@ -7,6 +7,9 @@ section is its GitHub release's notes.
 
 ## Unreleased
 
+- The client no longer reads `NOHEAD_API_URL`: a stray value sent requests,
+  with the API key, to another host. The base URL is `base_url:`, else
+  `https://api.nohead.io`; pass `base_url:` to use another API.
 - A request is sent once per attempt. Net::HTTP retried a GET, PUT or DELETE
   that timed out or lost its connection once more on its own, so a stalled
   request waited twice the `timeout:`, `max_retries:` sent more attempts than
