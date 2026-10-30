@@ -49,7 +49,8 @@ module Nohead
 
     # api_key::     A project API key ("nohead_sk_...", or "nohead_pk_..." when
     #               published-only). Defaults to NOHEAD_API_KEY.
-    # base_url::    Defaults to NOHEAD_API_URL, else https://api.nohead.io.
+    # base_url::    The API's address, an http or https URL. Defaults to
+    #               https://api.nohead.io (the environment isn't read for it).
     # project_id::  The key's project. Looked up once with GET /v1/me when omitted.
     # max_retries:: Retries of failed requests (see the README, "Retries").
     # timeout::     The longest wait in seconds without progress, per attempt:
@@ -66,8 +67,7 @@ module Nohead
                    headers: {}, warnings: true, on_retry: nil, transport: Transport.new)
       @api_key = present(api_key) || present(ENV.fetch("NOHEAD_API_KEY", nil)) or
         raise Error, "Missing API key: pass api_key or set NOHEAD_API_KEY"
-      @base_url = checked_base_url(present(base_url) || present(ENV.fetch("NOHEAD_API_URL", nil)) ||
-                                   DEFAULT_BASE_URL)
+      @base_url = checked_base_url(present(base_url) || DEFAULT_BASE_URL)
       @project = ProjectLookup.new(present(project_id))
       @max_retries = max_retries
       @timeout = timeout

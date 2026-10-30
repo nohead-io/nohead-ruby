@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 # Smoke test (Nohead spec §48.14): the core flow against a live API, with the
-# installed gem. Needs NOHEAD_API_URL and NOHEAD_API_KEY (a key with schema,
-# records, assets and webhooks read/write scopes). Exits non-zero on failure,
-# after deleting what it created.
+# installed gem. Needs NOHEAD_API_URL (the API to test, passed as base_url:)
+# and NOHEAD_API_KEY (a key with schema, records, assets and webhooks
+# read/write scopes). Exits non-zero on failure, after deleting what it
+# created.
 #
 #   gem build nohead.gemspec && gem install --install-dir tmp/gems nohead-*.gem
 #   GEM_HOME=tmp/gems NOHEAD_API_URL=http://localhost:3000 NOHEAD_API_KEY=nohead_sk_... ruby smoke/smoke.rb
@@ -27,7 +28,11 @@ rescue klass => e
   e
 end
 
-nohead = Nohead::Client.new
+# The API to test. Required, so that a missing variable doesn't run the test
+# against production.
+base_url = ENV.fetch("NOHEAD_API_URL", "")
+expect(!base_url.empty?, "NOHEAD_API_URL is set to the API to test")
+nohead = Nohead::Client.new(base_url: base_url)
 
 # What the test created and has not deleted yet, by resource: deleted at the
 # end, also when it fails.

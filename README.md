@@ -62,7 +62,7 @@ nohead = Nohead::Client.new(
 | `warnings:` | `true` | Warns about deprecated operations and plan usage, once each. |
 | `on_retry:` | | Called before each retry's wait. See [retries](#retries-and-idempotency). |
 
-An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`). A `base_url:` that isn't `http` or `https` raises `Nohead::Error`.
+An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`, `base_url: ""` uses `https://api.nohead.io`). The base URL comes only from `base_url:`, never from the environment. A `base_url:` that isn't `http` or `https` raises `Nohead::Error`.
 
 `with_options` gives a copy of the client with other settings (`timeout:`, `max_retries:`, `headers:`, added to the client's, and `on_retry:`), sharing its project lookup:
 
