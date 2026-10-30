@@ -41,6 +41,8 @@ gem "nohead"
 
 It needs Ruby 3.3 or newer. It uses only Ruby's standard library (Net::HTTP, JSON, OpenSSL). Use it on servers: API keys are secrets.
 
+Until 1.0, any release may break your code: pin a version, and read the changelog's **Breaking** entries before upgrading.
+
 ## Configuration
 
 ```ruby
@@ -355,14 +357,14 @@ gem build nohead.gemspec
 - `test/network_test.rb` runs the real transport (Net::HTTP) against an HTTP server on 127.0.0.1, `test/local_server.rb`, for what goes over the wire: lengths, timeouts, redirects and broken replies.
 - A test that makes no assertions fails.
 
-The smoke test (`smoke/smoke.rb`) runs the core flow against a real API, with the gem as installed from its built package. Nohead's own CI runs it on every API contract change.
+The smoke test (`smoke/smoke.rb`) runs the core flow against a real API, with the gem as installed from its built package. The Nohead API repository runs it in its end-to-end tests and before every release.
 
 ## Releasing
 
 1. Bump `lib/nohead/version.rb`, then `bundle install` (`Gemfile.lock` records the version, and CI installs frozen).
 2. Add a section for the version to `CHANGELOG.md` (`## 1.2.3`), which becomes the release's notes.
 3. Merge to `main`. Its ruleset requires the **CI passed** check, so the commit goes through a pull request or a branch whose CI passed, and force pushes are refused.
-4. Run the **SDK release** workflow in the Nohead API repository. It runs this commit's smoke test against the API and pushes the tag `v1.2.3`. Nobody else can push `v*` tags: a tag ruleset lets only that workflow's deploy key through.
+4. Run the **SDK release** workflow in the Nohead API repository. It runs this commit's smoke test against the API and pushes the tag `v1.2.3`. A tag ruleset lets only deploy keys push `v*` tags.
 5. The tag starts `.github/workflows/release.yml`. A build job checks the tag is on `main` and matches the version and its notes, and packs the gem, with no publishing credential. Its publishing job runs in the `release` environment, which only `v*` tags can use, and the registry's trusted publisher accepts only that environment. It pushes that gem to RubyGems through trusted publishing (no API key), then creates the GitHub release with the gem.
 
 ## License
