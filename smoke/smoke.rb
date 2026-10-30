@@ -28,7 +28,11 @@ rescue klass => e
   e
 end
 
-nohead = Nohead::Client.new(base_url: ENV.fetch("NOHEAD_API_URL", nil))
+# The API to test. Required, so that a missing variable doesn't run the test
+# against production.
+base_url = ENV.fetch("NOHEAD_API_URL", "")
+expect(!base_url.empty?, "NOHEAD_API_URL is set to the API to test")
+nohead = Nohead::Client.new(base_url: base_url)
 
 # What the test created and has not deleted yet, by resource: deleted at the
 # end, also when it fails.

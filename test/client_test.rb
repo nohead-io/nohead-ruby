@@ -39,7 +39,7 @@ class ClientTest < Minitest::Test
   end
 
   def test_empty_options_are_unset
-    with_env("NOHEAD_API_KEY" => "nohead_sk_env") do
+    with_env("NOHEAD_API_KEY" => "nohead_sk_env", "NOHEAD_API_URL" => "https://env.test") do
       transport = FakeTransport.new([json(200, ME), page([])])
       Nohead::Client.new(api_key: "", base_url: "", project_id: "", transport: transport).collections.list
       assert_equal(%w[https://api.nohead.io/v1/me https://api.nohead.io/v1/projects/prj_9/collections],
