@@ -7,8 +7,9 @@
 # parameter in openapi.json fails this test until a method takes it (and a
 # call in test/calls.rb or below passes it). Each call gets the contract's
 # examples of its operation's response, one per oneOf variant, and must return
-# them. Methods take `if_match` and `change_note` exactly where their
-# operations declare If-Match and Nohead-Change-Note.
+# them. Methods take `if_match`, `change_note` and `rich_text` exactly where
+# their operations declare If-Match, Nohead-Change-Note and rich_text, and a
+# client's `rich_text:` goes with exactly the operations that declare it.
 require_relative "test_helper"
 require_relative "calls"
 
@@ -42,7 +43,28 @@ class ContractTest < Minitest::Test
     ->(nohead) { nohead.webhooks.list(limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.webhooks.deliveries.list("wh_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },
     ->(nohead) { nohead.webhooks.secrets.list("wh_01J9ZQ3F8X", limit: 5, cursor: "cur_x") },
-    ->(nohead) { nohead.audit_events.list(limit: 5, cursor: "cur_x") }
+    ->(nohead) { nohead.audit_events.list(limit: 5, cursor: "cur_x") },
+    ->(nohead) { nohead.records.list("posts", rich_text: "html") },
+    ->(nohead) { nohead.records.get("rec_01J9ZQ3F8X", rich_text: "markdown") },
+    ->(nohead) { nohead.records.create("posts", data: { body: "# Hi" }, rich_text: "markdown") },
+    ->(nohead) { nohead.records.update("rec_01J9ZQ3F8X", data: { body: "# Hey" }, rich_text: "markdown") },
+    ->(nohead) { nohead.records.delete("rec_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.records.restore("rec_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.records.publish("rec_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.records.unpublish("rec_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.records.drafts("rec_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.records.bulk("posts", action: "publish", record_ids: ["rec_01J9ZQ3F8X"], rich_text: "html") },
+    ->(nohead) { nohead.records.search("posts", "hello", rich_text: "html") },
+    ->(nohead) { nohead.records.revisions.revert("rec_01J9ZQ3F8X", 1, rich_text: "html") },
+    ->(nohead) { nohead.search("hello", rich_text: "html") },
+    ->(nohead) { nohead.drafts.create("rec_01J9ZQ3F8X", data: { body: "# Hey" }, rich_text: "markdown") },
+    ->(nohead) { nohead.drafts.list("posts", rich_text: "html") },
+    ->(nohead) { nohead.drafts.get("drf_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.drafts.update("drf_01J9ZQ3F8X", data: { body: "# Hey" }, rich_text: "document") },
+    ->(nohead) { nohead.drafts.discard("drf_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.drafts.merge("drf_01J9ZQ3F8X", rich_text: "html") },
+    ->(nohead) { nohead.drafts.schedule("drf_01J9ZQ3F8X", merge_at: Time.utc(2027, 1, 1), rich_text: "html") },
+    ->(nohead) { nohead.drafts.unschedule("drf_01J9ZQ3F8X", rich_text: "html") }
   ].freeze
 
   def test_the_client_covers_the_contract
@@ -60,6 +82,18 @@ class ContractTest < Minitest::Test
       [route.id, route.query.map(&:name) - sent[route.id]]
     end
     assert_empty unsent.reject { |_, params| params.empty? }, "query parameters no call sends"
+  end
+
+  def test_the_clients_rich_text_goes_with_the_operations_that_declare_it
+    nohead, transport = client([Calls.method(:reply)], rich_text: "markdown")
+    Calls::EVERY_CALL.each { |call| call.call(nohead) }
+    routes = transport.requests.select { |request| request.uri.host == "api.test" }.map do |request|
+      route = Spec.route_of(request.method, request.path)
+      expected = route.query.map(&:name).include?("rich_text") ? { "rich_text" => "markdown" } : {}
+      assert_equal expected, request.params.slice("rich_text"), route.id
+      route.id
+    end
+    assert_empty Nohead::OPERATIONS.keys - routes
   end
 
   # Checks a request against its operation (as FakeTransport does with
@@ -104,10 +138,12 @@ class ContractTest < Minitest::Test
     end
   end
 
-  # The SDK options that send a header, by header.
+  # The SDK options that send a header, by header, and a query parameter, by name.
   HEADER_OPTIONS = { "If-Match" => :if_match, "Nohead-Change-Note" => :change_note }.freeze
+  QUERY_OPTIONS = { "rich_text" => :rich_text }.freeze
+  OPTIONS = (HEADER_OPTIONS.values + QUERY_OPTIONS.values).freeze
 
-  def test_methods_take_the_headers_their_operations_declare
+  def test_methods_take_the_options_their_operations_declare
     checked = Calls::EVERY_CALL.filter_map do |call|
       nohead, transport = client([Calls.method(:reply)])
       method = outermost_method { call.call(nohead) }
@@ -115,12 +151,17 @@ class ContractTest < Minitest::Test
       next if api.size > 1 # a helper (assets.upload), made of methods checked on their own
 
       route = Spec.route_of(api.first.method, api.first.path)
-      declared = HEADER_OPTIONS.filter_map { |header, option| option if route.headers.include?(header) }
       taken = method.parameters.filter_map { |kind, name| name if %i[key keyreq].include?(kind) }
-      assert_equal declared.sort, (taken & HEADER_OPTIONS.values).sort, "#{method.owner}##{method.name} (#{route.id})"
+      assert_equal declared_options(route).sort, (taken & OPTIONS).sort, "#{method.owner}##{method.name} (#{route.id})"
       route.id
     end
     assert_empty Nohead::OPERATIONS.keys - checked, "operations whose method is not checked"
+  end
+
+  # The SDK options an operation's method must take.
+  def declared_options(route)
+    HEADER_OPTIONS.filter_map { |header, option| option if route.headers.include?(header) } +
+      QUERY_OPTIONS.filter_map { |name, option| option if route.query.map(&:name).include?(name) }
   end
 
   # The operation the last request of a call is.

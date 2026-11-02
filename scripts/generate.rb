@@ -2,8 +2,8 @@
 
 # Writes lib/nohead/operations.rb from openapi.json: the method and path of
 # every operation an API key can call, the names of the timestamp fields in
-# their responses and in webhook events, and the objects that hold record
-# field values. Session-only operations
+# their responses and in webhook events, the objects that hold record field
+# values, and the operations that take `rich_text`. Session-only operations
 # (organizations, projects, members, API keys, billing) belong to the web app
 # and are left out.
 #
@@ -75,10 +75,18 @@ record_data = spec.dig("components", "schemas").filter_map do |_, schema|
   props.dig("data", "$ref")&.end_with?("/RecordData") && props.dig("object", "const")
 end
 
+# The operations that declare the `rich_text` query parameter, on the
+# operation or its path.
+rich_text = operations.filter_map do |id, _, path, operation|
+  parameters = [*spec.dig("paths", path, "parameters"), *operation["parameters"]]
+  id if parameters.any? { |parameter| resolve(spec, parameter).values_at("in", "name") == %w[query rich_text] }
+end
+
 lines = operations.map do |id, method, path|
   "    #{id.inspect} => [#{method.inspect}, #{path.inspect}]"
 end
 timestamp_lines = names.uniq.sort.each_slice(6).map { |slice| "    #{slice.join(' ')}" }
+rich_text_lines = rich_text.each_slice(4).map { |slice| "    #{slice.join(' ')}" }
 
 File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
   # frozen_string_literal: true
@@ -97,6 +105,12 @@ File.write(File.join(root, "lib/nohead/operations.rb"), <<~RUBY)
 
     # The objects whose `data` is a record's field values.
     RECORD_DATA_OBJECTS = %w[#{record_data.sort.join(' ')}].to_set.freeze
+
+    # The operations that take `rich_text`: how rich text fields read in the
+    # records and drafts they return.
+    RICH_TEXT_OPERATIONS = %w[
+  #{rich_text_lines.join("\n")}
+    ].to_set.freeze
   end
 RUBY
 puts "#{operations.size} operations, #{names.uniq.size} timestamp fields"

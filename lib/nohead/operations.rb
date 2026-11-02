@@ -97,4 +97,15 @@ module Nohead
 
   # The objects whose `data` is a record's field values.
   RECORD_DATA_OBJECTS = %w[draft record record_revision revert_preview].to_set.freeze
+
+  # The operations that take `rich_text`: how rich text fields read in the
+  # records and drafts they return.
+  RICH_TEXT_OPERATIONS = %w[
+    collections_search drafts_create drafts_discard drafts_get
+    drafts_list drafts_merge drafts_schedule drafts_unschedule
+    drafts_update projects_search record_drafts_list record_revisions_revert
+    records_bulk records_create records_delete records_get
+    records_list records_publish records_restore records_unpublish
+    records_update
+  ].to_set.freeze
 end

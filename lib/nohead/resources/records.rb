@@ -4,8 +4,8 @@ module Nohead
   module Resources
     # The base of the resources: each holds the client it sends requests with.
     class Resource
-      # Request options that are headers, not body fields.
-      OPTIONS = %i[change_note if_match].freeze
+      # Request options, not body fields.
+      OPTIONS = %i[change_note if_match rich_text].freeze
 
       def initialize(client)
         @client = client
@@ -17,8 +17,8 @@ module Nohead
 
       # The keyword arguments a method sends as the body. SDK options would
       # land there when the method doesn't take them (its operation doesn't
-      # declare the header), so they raise ArgumentError as Ruby does for
-      # unknown keywords.
+      # declare the header or query parameter), so they raise ArgumentError as
+      # Ruby does for unknown keywords.
       def body_of(params)
         option = OPTIONS.find { |name| params.key?(name) }
         raise ArgumentError, "unknown keyword: :#{option}" if option
@@ -48,56 +48,62 @@ module Nohead
       # A collection's records, newest first by default. `filter` holds
       # filters ({ published_at: { exists: true } } for published records),
       # `expand` relation or asset fields to embed under `expanded` (at most 5).
-      def list(collection, filter: nil, sort: nil, expand: nil, limit: nil, cursor: nil)
+      # Methods that return records or drafts take `rich_text:` ("document",
+      # "html" or "markdown"): how their rich text fields read.
+      def list(collection, filter: nil, sort: nil, expand: nil, limit: nil, cursor: nil, rich_text: nil)
         @client.paginate("records_list", path: { collection_id: collection }, query: {
                            filter: filter, sort: sort, expand: expand, limit: limit, cursor: cursor
-                         })
+                         }, rich_text: rich_text)
       end
 
       # A deleted record too, with `deleted_at` and `purge_after`.
-      def get(record, expand: nil)
-        @client.request("records_get", path: { record_id: record }, query: { expand: expand })
+      def get(record, expand: nil, rich_text: nil)
+        @client.request("records_get", path: { record_id: record }, query: { expand: expand }, rich_text: rich_text)
       end
 
       # Creates an unpublished record: create("posts", data: { title: "Hello" }).
       # With upsert_on:, the key of a unique field, it updates the record holding
       # that value instead, if one exists, so a sync can run again without
       # duplicates; if_match: then applies to that update.
-      def create(collection, if_match: nil, idempotency_key: nil, change_note: nil, **params)
+      def create(collection, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil, **params)
         @client.request("records_create", path: { collection_id: collection }, body: body_of(params),
                                           if_match: if_match, idempotency_key: idempotency_key,
-                                          change_note: change_note)
+                                          change_note: change_note, rich_text: rich_text)
       end
 
       # Sets the given fields (nil clears one); others keep their values.
-      def update(record, if_match: nil, idempotency_key: nil, change_note: nil, **params)
+      def update(record, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil, **params)
         @client.request("records_update", path: { record_id: record }, body: body_of(params),
                                           if_match: if_match, idempotency_key: idempotency_key,
-                                          change_note: change_note)
+                                          change_note: change_note, rich_text: rich_text)
       end
 
       # Soft-deletes the record: restore brings it back until its `purge_after`.
       # Deleting a deleted record changes nothing.
-      def delete(record, if_match: nil, idempotency_key: nil, change_note: nil)
+      def delete(record, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil)
         @client.request("records_delete", path: { record_id: record }, if_match: if_match,
-                                          idempotency_key: idempotency_key, change_note: change_note)
+                                          idempotency_key: idempotency_key, change_note: change_note,
+                                          rich_text: rich_text)
       end
 
-      def restore(record, if_match: nil, idempotency_key: nil, change_note: nil)
+      def restore(record, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil)
         @client.request("records_restore", path: { record_id: record }, if_match: if_match,
-                                           idempotency_key: idempotency_key, change_note: change_note)
+                                           idempotency_key: idempotency_key, change_note: change_note,
+                                           rich_text: rich_text)
       end
 
       # A live record with a pending draft raises ConflictError (detail code
       # `draft_pending`): publishing never merges a draft (drafts.merge does).
-      def publish(record, if_match: nil, idempotency_key: nil, change_note: nil)
+      def publish(record, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil)
         @client.request("records_publish", path: { record_id: record }, if_match: if_match,
-                                           idempotency_key: idempotency_key, change_note: change_note)
+                                           idempotency_key: idempotency_key, change_note: change_note,
+                                           rich_text: rich_text)
       end
 
-      def unpublish(record, if_match: nil, idempotency_key: nil, change_note: nil)
+      def unpublish(record, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil)
         @client.request("records_unpublish", path: { record_id: record }, if_match: if_match,
-                                             idempotency_key: idempotency_key, change_note: change_note)
+                                             idempotency_key: idempotency_key, change_note: change_note,
+                                             rich_text: rich_text)
       end
 
       # What is live: since when, by whom, and the revision. Raises
@@ -130,8 +136,9 @@ module Nohead
       end
 
       # The record's drafts: at most one for now.
-      def drafts(record, limit: nil, cursor: nil)
-        @client.paginate("record_drafts_list", path: { record_id: record }, query: { limit: limit, cursor: cursor })
+      def drafts(record, limit: nil, cursor: nil, rich_text: nil)
+        @client.paginate("record_drafts_list", path: { record_id: record }, query: { limit: limit, cursor: cursor },
+                                               rich_text: rich_text)
       end
 
       # A collection's pending scheduled changes, soonest first: publishes,
@@ -149,9 +156,10 @@ module Nohead
 
       # Publishes, unpublishes, deletes, restores or updates up to 100 records.
       # Each record succeeds or fails on its own; see `results`.
-      def bulk(collection, idempotency_key: nil, change_note: nil, **params)
+      def bulk(collection, idempotency_key: nil, change_note: nil, rich_text: nil, **params)
         @client.request("records_bulk", path: { collection_id: collection }, body: body_of(params),
-                                        idempotency_key: idempotency_key, change_note: change_note)
+                                        idempotency_key: idempotency_key, change_note: change_note,
+                                        rich_text: rich_text)
       end
 
       # The changes between two revisions: diff(record, from: 1, to: 2).
@@ -161,11 +169,11 @@ module Nohead
 
       # Full-text search in one collection, matching its searchable fields, most
       # relevant first, through the first 1,000 hits.
-      def search(collection, query, filter: nil, sort: nil, expand: nil, limit: nil, cursor: nil)
+      def search(collection, query, filter: nil, sort: nil, expand: nil, limit: nil, cursor: nil, rich_text: nil)
         @client.paginate("collections_search", path: { collection_id: collection }, query: {
                            q: query, filter: filter, sort: sort, expand: expand, limit: limit,
                            cursor: cursor
-                         })
+                         }, rich_text: rich_text)
       end
     end
 
@@ -184,10 +192,12 @@ module Nohead
 
       # Restores the record's data as of `revision`, as a new revision. With
       # dry_run: true, previews it.
-      def revert(record, revision, dry_run: false, if_match: nil, idempotency_key: nil, change_note: nil)
+      def revert(record, revision, dry_run: false, if_match: nil, idempotency_key: nil, change_note: nil,
+                 rich_text: nil)
         @client.request("record_revisions_revert", path: { record_id: record, revision: revision },
                                                    query: { dry_run: dry_run || nil }, if_match: if_match,
-                                                   idempotency_key: idempotency_key, change_note: change_note)
+                                                   idempotency_key: idempotency_key, change_note: change_note,
+                                                   rich_text: rich_text)
       end
     end
 

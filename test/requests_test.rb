@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "calls"
 
 class RequestsTest < Minitest::Test
   include Helpers
@@ -192,11 +193,57 @@ class RequestsTest < Minitest::Test
       -> { nohead.webhooks.update("wh_1", enabled: false, change_note: "Off") },
       -> { nohead.assets.create_upload(filename: "a.txt", content_type: "text/plain", byte_size: 1, change_note: "x") },
       -> { nohead.records.bulk("posts", action: "publish", record_ids: [], if_match: 1) },
-      -> { nohead.collections.update("posts", name: "Articles", if_match: 1) }
+      -> { nohead.collections.update("posts", name: "Articles", if_match: 1) },
+      -> { nohead.collections.create(name: "Posts", slug: "posts", rich_text: "html") },
+      -> { nohead.fields.update("fld_1", name: "Body", rich_text: "html") }
     ].each do |call|
       error = assert_raises(ArgumentError, &call)
-      assert_match(/unknown keyword: :(change_note|if_match)/, error.message)
+      assert_match(/unknown keyword: :(change_note|if_match|rich_text)/, error.message)
     end
+    assert_empty transport.requests
+  end
+
+  def test_rich_text_is_sent_only_when_set
+    nohead, transport = client([Calls.method(:reply)])
+    nohead.records.get("rec_1")
+    nohead.records.get("rec_1", rich_text: "")
+    nohead.records.get("rec_1", rich_text: "html")
+    assert_equal([nil, nil, "html"], transport.requests.map { |request| request.params["rich_text"] })
+  end
+
+  # The client's rich_text: goes to the operations that declare the
+  # parameter, and only those.
+  def test_the_clients_rich_text_goes_to_the_operations_that_take_it
+    nohead, transport = client([Calls.method(:reply)], rich_text: :markdown)
+    nohead.records.get("rec_1")
+    nohead.drafts.list("posts")
+    nohead.records.update("rec_1", data: { body: "# Hello" })
+    nohead.records.publication("rec_1")
+    nohead.records.revisions.get("rec_1", 1)
+    nohead.collections.get("posts")
+    sent = transport.requests.map { |request| request.params["rich_text"] }
+    assert_equal ["markdown", "markdown", "markdown", nil, nil, nil], sent
+  end
+
+  def test_a_calls_rich_text_wins_over_the_clients
+    nohead, transport = client([Calls.method(:reply)], rich_text: "html")
+    nohead.records.get("rec_1", rich_text: "document")
+    nohead.drafts.get("drf_1", rich_text: :markdown)
+    nohead.records.get("rec_1", rich_text: "")
+    nohead.with_options(rich_text: "markdown").records.get("rec_1")
+    nohead.with_options(rich_text: nil).records.get("rec_1")
+    nohead.with_options(timeout: 5).records.get("rec_1")
+    assert_equal(%w[document markdown html markdown] + [nil, "html"],
+                 transport.requests.map { |request| request.params["rich_text"] })
+  end
+
+  def test_rich_text_is_refused_where_the_operation_does_not_take_it
+    nohead, transport = client([Calls.method(:reply)])
+    assert_raises(ArgumentError) { nohead.records.publication("rec_1", rich_text: "html") }
+    error = assert_raises(ArgumentError) do
+      nohead.request("collections_get", path: { collection_id: "posts" }, rich_text: "html")
+    end
+    assert_equal "collections_get does not take rich_text", error.message
     assert_empty transport.requests
   end
 
