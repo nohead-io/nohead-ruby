@@ -131,6 +131,7 @@ nohead.records.get(id, rich_text: "markdown").data["body"] # a Markdown string
 - The methods that return records or drafts take `rich_text:`; a call's value wins over the client's, and other methods never send it.
 - HTML has every text and attribute escaped, ready to put in a page. Images come with their URLs, so they need no `expand:`.
 - Record history (`records.revisions.list` and `get`) and webhook events keep documents.
+- A string you write is read as Markdown, so write back Markdown or the document, never the HTML: with `rich_text: "html"` on the client, writes answer with HTML too.
 
 ## Pagination
 

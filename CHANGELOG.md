@@ -12,7 +12,7 @@ section is its GitHub release's notes.
   `with_options` for every call, or on a call: the methods that return
   records or drafts take it, and a call's value wins over the client's. The
   field's value is then a string, in records embedded with `expand:` too.
-  Rich text fields also take Markdown when written.
+  Writing Markdown already worked: `data` is sent as it is.
 
 ## 0.9.0
 
