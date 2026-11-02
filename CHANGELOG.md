@@ -5,7 +5,7 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
-## Unreleased
+## 0.10.0
 
 - Rich text fields read as HTML or Markdown with `rich_text:` (`"document"`,
   the default, `"html"` or `"markdown"`), on `Nohead::Client.new` and
