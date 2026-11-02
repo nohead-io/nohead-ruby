@@ -30,6 +30,14 @@ class PaginationTest < Minitest::Test
     assert_equal "true", transport.requests[1].params["filter[featured]"]
   end
 
+  def test_every_page_keeps_rich_text
+    pages = [page([record("rec_1")], next_cursor: "c2", has_more: true), page([record("rec_2")])]
+    nohead, transport = client(pages * 2, rich_text: "html")
+    nohead.records.list("posts", rich_text: "markdown").to_a
+    nohead.records.list("posts").to_a
+    assert_equal(%w[markdown markdown html html], transport.requests.map { |request| request.params["rich_text"] })
+  end
+
   def test_stops_fetching_once_it_has_enough
     nohead, transport = client([page([record("rec_1"), record("rec_2")], next_cursor: "c2", has_more: true)])
     assert_equal ["rec_1"], nohead.records.list("posts").first(1).map(&:id)

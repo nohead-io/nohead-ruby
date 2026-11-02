@@ -5,6 +5,15 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
+## Unreleased
+
+- Rich text fields read as HTML or Markdown with `rich_text:` (`"document"`,
+  the default, `"html"` or `"markdown"`), on `Nohead::Client.new` and
+  `with_options` for every call, or on a call: the methods that return
+  records or drafts take it, and a call's value wins over the client's. The
+  field's value is then a string, in records embedded with `expand:` too.
+  Writing Markdown already worked: `data` is sent as it is.
+
 ## 0.9.0
 
 - **Breaking:** the client no longer reads `NOHEAD_API_URL`: a stray value

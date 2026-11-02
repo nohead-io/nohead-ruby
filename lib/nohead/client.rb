@@ -61,10 +61,13 @@ module Nohead
     # warnings::    Warn about deprecated operations and plan usage (once each).
     # on_retry::    Called with a RetryEvent before each retry's wait, for
     #               example to log it.
+    # rich_text::   How rich text fields read in the records and drafts
+    #               returned: "document" (the API's default), "html" or
+    #               "markdown". A method's own `rich_text:` wins.
     #
     # An empty string is the same as leaving an option out.
     def initialize(api_key: nil, base_url: nil, project_id: nil, max_retries: 2, timeout: 60,
-                   headers: {}, warnings: true, on_retry: nil, transport: Transport.new)
+                   headers: {}, warnings: true, on_retry: nil, rich_text: nil, transport: Transport.new)
       @api_key = present(api_key) || present(ENV.fetch("NOHEAD_API_KEY", nil)) or
         raise Error, "Missing API key: pass api_key or set NOHEAD_API_KEY"
       @base_url = checked_base_url(present(base_url) || DEFAULT_BASE_URL)
@@ -74,6 +77,7 @@ module Nohead
       @headers = merge_headers({}, headers.to_h)
       @warnings = warnings
       @on_retry = on_retry
+      @rich_text = present(rich_text)
       @transport = transport
       build_resources
     end
@@ -81,8 +85,11 @@ module Nohead
     # A copy of the client with other settings, which shares its transport
     # and project lookup: `nohead.with_options(timeout: 5).records.get(id)`.
     # `headers:` are added to the client's.
-    def with_options(timeout: @timeout, max_retries: @max_retries, headers: {}, on_retry: @on_retry)
-      dup.tap { |copy| copy.configure(timeout, max_retries, merge_headers(@headers, headers.to_h), on_retry) }
+    def with_options(timeout: @timeout, max_retries: @max_retries, headers: {}, on_retry: @on_retry,
+                     rich_text: @rich_text)
+      dup.tap do |copy|
+        copy.configure(timeout, max_retries, merge_headers(@headers, headers.to_h), on_retry, present(rich_text))
+      end
     end
 
     # Full-text search across the key's project (or some of its collections),
@@ -90,10 +97,11 @@ module Nohead
     # `published_at` ({ published_at: { exists: true } } for published
     # records), as records.list does. `collections` wins over a `collection`
     # filter.
-    def search(query, collections: nil, filter: nil, limit: nil, cursor: nil)
+    def search(query, collections: nil, filter: nil, limit: nil, cursor: nil, rich_text: nil)
       filter = filter.to_h.transform_keys(&:to_sym)
       filter = filter.merge(collection: { in: collections }) unless collections.nil?
-      paginate("projects_search", query: { q: query, filter: filter, limit: limit, cursor: cursor })
+      paginate("projects_search", query: { q: query, filter: filter, limit: limit, cursor: cursor },
+                                  rich_text: rich_text)
     end
 
     # The API key's project, from GET /v1/me the first time. Threads that
@@ -110,17 +118,18 @@ module Nohead
     # result. The resources call this; it is public for operations the SDK
     # does not wrap yet.
     def request(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
-                change_note: nil, if_match: nil)
+                change_note: nil, if_match: nil, rich_text: nil)
       NoheadObject.wrap(exchange(operation, path: path, query: query, body: body, idempotency_key: idempotency_key,
-                                            change_note: change_note, if_match: if_match).first)
+                                            change_note: change_note, if_match: if_match, rich_text: rich_text).first)
     end
 
     # A list operation as a Page that fetches the following pages as needed.
-    def paginate(operation, path: {}, query: {})
+    def paginate(operation, path: {}, query: {}, rich_text: nil)
       params = query.dup
       cursor = params.delete(:cursor)
       fetch = lambda do |next_cursor|
-        list, status = exchange(operation, path: path, query: params.merge(cursor: next_cursor))
+        list, status = exchange(operation, path: path, query: params.merge(cursor: next_cursor),
+                                           rich_text: rich_text)
         unless list.is_a?(Hash) && list["data"].is_a?(Array) && list["meta"].is_a?(Hash)
           raise Error, "The API's response could not be read (HTTP #{status})"
         end
@@ -158,11 +167,12 @@ module Nohead
     protected
 
     # with_options' settings, on its copy.
-    def configure(timeout, max_retries, headers, on_retry)
+    def configure(timeout, max_retries, headers, on_retry, rich_text)
       @timeout = timeout
       @max_retries = max_retries
       @headers = headers
       @on_retry = on_retry
+      @rich_text = rich_text
     end
 
     private
@@ -189,9 +199,9 @@ module Nohead
 
     # The parsed body of a 2xx response, and its status.
     def exchange(operation, path: {}, query: {}, body: nil, idempotency_key: nil,
-                 change_note: nil, if_match: nil)
+                 change_note: nil, if_match: nil, rich_text: nil)
       method, template = OPERATIONS.fetch(operation)
-      url = build_url(template, path) + query_string(query)
+      url = build_url(template, path) + query_string(query.merge(rich_text_query(operation, rich_text)))
       headers = request_headers(method, body, idempotency_key, change_note, if_match)
       payload = body.nil? ? nil : JSON.generate(json_ready(body))
       attempt = 0
@@ -236,6 +246,15 @@ module Nohead
         URI.encode_uri_component(value.to_s)
       end
       @base_url + path
+    end
+
+    # The request's `rich_text`, else the client's, for an operation that
+    # takes it. Others never send the client's.
+    def rich_text_query(operation, rich_text)
+      return { rich_text: present(rich_text) || @rich_text } if RICH_TEXT_OPERATIONS.include?(operation)
+      raise ArgumentError, "#{operation} does not take rich_text" if present(rich_text)
+
+      {}
     end
 
     # Query parameters as the API reads them: hashes become key[sub]=...

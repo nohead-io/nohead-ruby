@@ -20,6 +20,7 @@ end
 - [Configuration](#configuration)
 - [Records](#records)
 - [Drafts](#drafts)
+- [Rich text](#rich-text)
 - [Pagination](#pagination)
 - [Errors](#errors)
 - [Retries and idempotency](#retries-and-idempotency)
@@ -63,10 +64,11 @@ nohead = Nohead::Client.new(
 | `headers:` | `{}` | Added to every request. |
 | `warnings:` | `true` | Warns about deprecated operations and plan usage, once each. |
 | `on_retry:` | | Called before each retry's wait. See [retries](#retries-and-idempotency). |
+| `rich_text:` | `"document"` | How rich text fields read: see [rich text](#rich-text). |
 
 An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`, `base_url: ""` uses `https://api.nohead.io`). The base URL comes only from `base_url:`, never from the environment. A `base_url:` that isn't `http` or `https` raises `Nohead::Error`.
 
-`with_options` gives a copy of the client with other settings (`timeout:`, `max_retries:`, `headers:`, added to the client's, and `on_retry:`), sharing its project lookup:
+`with_options` gives a copy of the client with other settings (`timeout:`, `max_retries:`, `headers:`, added to the client's, `on_retry:` and `rich_text:`), sharing its project lookup:
 
 ```ruby
 nohead.with_options(timeout: 5, max_retries: 0).records.get(id)
@@ -112,6 +114,24 @@ nohead.drafts.merge(draft.id) # or drafts.schedule(draft.id, merge_at: ...)
 - A merge changes content only: a live record stays live, an unpublished one unpublished. Publishing a live record with a pending draft raises `ConflictError` (`draft_pending`).
 - `records.drafts(id)` lists a record's draft, and `drafts.list(collection)` a collection's.
 - `drafts.discard` deletes one for good.
+
+## Rich text
+
+A rich text field is written as Markdown or as a document (ProseMirror JSON), and reads as a document unless you ask for HTML or Markdown with `rich_text:`, for the whole client or for one call:
+
+```ruby
+nohead.records.create("posts", data: { body: "## Hello\n\nWritten in **Markdown**." })
+
+nohead = Nohead::Client.new(rich_text: "html")
+nohead.records.get(id).data["body"] # an HTML string
+nohead.records.get(id, rich_text: "markdown").data["body"] # a Markdown string
+```
+
+- With `"html"` or `"markdown"`, the field's value is a string instead of the document, in records embedded with `expand:` too. `"document"` is the default.
+- The methods that return records or drafts take `rich_text:`; a call's value wins over the client's, and other methods never send it.
+- HTML has every text and attribute escaped, ready to put in a page. Images come with their URLs, so they need no `expand:`.
+- Record history (`records.revisions.list` and `get`) and webhook events keep documents.
+- A string you write is read as Markdown, so write back Markdown or the document, never the HTML: with `rich_text: "html"` on the client, writes answer with HTML too.
 
 ## Pagination
 

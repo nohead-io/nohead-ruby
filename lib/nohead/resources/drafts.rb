@@ -5,57 +5,60 @@ module Nohead
     # Drafts: changes to a record's content that wait until they are merged
     # into it, now or at a set time, while the record keeps its current
     # content. A record has at most one. `draft` is a draft ID ("drf_..."),
-    # `record` a record ID and `collection` a collection ID or slug.
+    # `record` a record ID and `collection` a collection ID or slug. Every
+    # method takes `rich_text:`, as records' do.
     class Drafts < Resource
       # Starts the record's draft: `data` over the record's values, or with
       # `from_revision`, over an earlier revision's. A second draft raises
       # ConflictError (detail code `draft_exists`, with its `draft_id`).
-      def create(record, data: {}, from_revision: nil, idempotency_key: nil)
+      def create(record, data: {}, from_revision: nil, idempotency_key: nil, rich_text: nil)
         @client.request("drafts_create", path: { record_id: record },
                                          body: { data: data, from_revision: from_revision }.compact,
-                                         idempotency_key: idempotency_key)
+                                         idempotency_key: idempotency_key, rich_text: rich_text)
       end
 
       # A collection's drafts, most recently changed first. One record's
       # draft is `records.drafts(record)`.
-      def list(collection, sort: nil, limit: nil, cursor: nil)
+      def list(collection, sort: nil, limit: nil, cursor: nil, rich_text: nil)
         @client.paginate("drafts_list", path: { collection_id: collection },
-                                        query: { sort: sort, limit: limit, cursor: cursor })
+                                        query: { sort: sort, limit: limit, cursor: cursor }, rich_text: rich_text)
       end
 
       # With `data` as the record reads after the merge, for previews.
-      def get(draft, expand: nil)
-        @client.request("drafts_get", path: { draft_id: draft }, query: { expand: expand })
+      def get(draft, expand: nil, rich_text: nil)
+        @client.request("drafts_get", path: { draft_id: draft }, query: { expand: expand }, rich_text: rich_text)
       end
 
       # Sets the given fields (nil clears one), as a record update does.
-      def update(draft, data:, if_match: nil, idempotency_key: nil)
+      def update(draft, data:, if_match: nil, idempotency_key: nil, rich_text: nil)
         @client.request("drafts_update", path: { draft_id: draft }, body: { data: data },
-                                         if_match: if_match, idempotency_key: idempotency_key)
+                                         if_match: if_match, idempotency_key: idempotency_key, rich_text: rich_text)
       end
 
       # Deletes the draft for good; returns it as it was.
-      def discard(draft, if_match: nil, idempotency_key: nil)
+      def discard(draft, if_match: nil, idempotency_key: nil, rich_text: nil)
         @client.request("drafts_discard", path: { draft_id: draft }, if_match: if_match,
-                                          idempotency_key: idempotency_key)
+                                          idempotency_key: idempotency_key, rich_text: rich_text)
       end
 
       # Applies the draft to its record now, as one `merge` revision, and
       # returns the record. Content only: the record stays live or not.
-      def merge(draft, if_match: nil, idempotency_key: nil, change_note: nil)
+      def merge(draft, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil)
         @client.request("drafts_merge", path: { draft_id: draft }, if_match: if_match,
-                                        idempotency_key: idempotency_key, change_note: change_note)
+                                        idempotency_key: idempotency_key, change_note: change_note,
+                                        rich_text: rich_text)
       end
 
       # Merges the draft at `merge_at` (a Time or ISO 8601 string in the
       # future); returns the draft.
-      def schedule(draft, merge_at:, idempotency_key: nil)
+      def schedule(draft, merge_at:, idempotency_key: nil, rich_text: nil)
         @client.request("drafts_schedule", path: { draft_id: draft }, body: { merge_at: merge_at },
-                                           idempotency_key: idempotency_key)
+                                           idempotency_key: idempotency_key, rich_text: rich_text)
       end
 
-      def unschedule(draft, idempotency_key: nil)
-        @client.request("drafts_unschedule", path: { draft_id: draft }, idempotency_key: idempotency_key)
+      def unschedule(draft, idempotency_key: nil, rich_text: nil)
+        @client.request("drafts_unschedule", path: { draft_id: draft }, idempotency_key: idempotency_key,
+                                             rich_text: rich_text)
       end
     end
   end
