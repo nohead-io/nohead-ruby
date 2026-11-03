@@ -104,8 +104,8 @@ module Nohead
     collections_search drafts_create drafts_discard drafts_get
     drafts_list drafts_merge drafts_schedule drafts_unschedule
     drafts_update projects_search record_drafts_list record_revisions_revert
-    records_bulk records_create records_delete records_get
-    records_list records_publish records_restore records_unpublish
-    records_update
+    records_bulk records_create records_delete records_diff
+    records_get records_list records_publish records_restore
+    records_unpublish records_update
   ].to_set.freeze
 end
