@@ -186,6 +186,12 @@ class RequestsTest < Minitest::Test
     assert_equal({ "from" => "1", "to" => "2" }, transport.requests.first.params)
   end
 
+  def test_diff_sends_rich_text
+    nohead, transport = client([json(200, { object: "record_diff", record_id: "rec_1", from: 1, to: 2, changes: [] })])
+    nohead.records.diff("rec_1", from: 1, to: 2, rich_text: "markdown")
+    assert_equal "markdown", transport.requests.first.params["rich_text"]
+  end
+
   def test_options_a_method_does_not_take_are_not_sent_as_body_fields
     nohead, transport = client([json(201, {})])
     [
