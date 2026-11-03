@@ -162,9 +162,11 @@ module Nohead
                                         rich_text: rich_text)
       end
 
-      # The changes between two revisions: diff(record, from: 1, to: 2).
-      def diff(record, from:, to:)
-        @client.request("records_diff", path: { record_id: record }, query: { from: from, to: to })
+      # The changes between two revisions: diff(record, from: 1, to: 2). With
+      # rich_text:, rich text fields' before and after read as HTML or Markdown.
+      def diff(record, from:, to:, rich_text: nil)
+        @client.request("records_diff", path: { record_id: record }, query: { from: from, to: to },
+                                        rich_text: rich_text)
       end
 
       # Full-text search in one collection, matching its searchable fields, most

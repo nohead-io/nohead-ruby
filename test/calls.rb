@@ -32,7 +32,7 @@ module Calls
     ->(nohead) { nohead.drafts.discard("drf_01J9ZQ3F8X") },
     ->(nohead) { nohead.records.count("posts", filter: { published_at: { exists: false } }) },
     ->(nohead) { nohead.records.bulk("posts", action: "publish", record_ids: ["rec_01J9ZQ3F8X"]) },
-    ->(nohead) { nohead.records.diff("rec_01J9ZQ3F8X", from: 1, to: 2) },
+    ->(nohead) { nohead.records.diff("rec_01J9ZQ3F8X", from: 1, to: 2, rich_text: "markdown") },
     ->(nohead) { nohead.records.search("posts", "hello", filter: { published_at: { exists: true } }, sort: "-published_at", expand: ["author"]) },
     ->(nohead) { nohead.records.revisions.list("rec_01J9ZQ3F8X", filter: { operation: "update" }) },
     ->(nohead) { nohead.records.revisions.get("rec_01J9ZQ3F8X", 1) },
