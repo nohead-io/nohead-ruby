@@ -12,6 +12,8 @@ nohead.records.list("posts", filter: { published_at: { exists: true } }).each do
 end
 ```
 
+The key is a project API key: create one under **API keys** in the [web app](https://app.nohead.io), with the **Read records** scope for this example, and set it as `NOHEAD_API_KEY` in your app's environment (or pass it as `api_key:`, under [Configuration](#configuration)). The SDK doesn't read the key that `nohead login` saves for the CLI: give your app a key of its own.
+
 > **Status:** 0.x until the Nohead API launches.
 
 ## Contents
