@@ -5,7 +5,7 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
-## Unreleased
+## 0.12.0
 
 - `webhooks.create` and `webhooks.update` take `published_only:`, and every
   webhook has `"published_only"`: a published-only webhook sends only the events that change
