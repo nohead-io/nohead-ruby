@@ -59,7 +59,6 @@ nohead = Nohead::Client.new(
 | Option | Default | |
 |---|---|---|
 | `api_key:` | `NOHEAD_API_KEY` | A project API key (`nohead_sk_...`, or `nohead_pk_...` when published-only). Required. |
-| `base_url:` | `https://api.nohead.io` | For a proxy, or a mock server in tests. |
 | `project_id:` | the key's project | Looked up once with `GET /v1/me` when omitted. |
 | `max_retries:` | `2` | See [retries](#retries-and-idempotency). |
 | `timeout:` | `60` | The longest wait in seconds without progress, per attempt: connecting, waiting for the response, and between reads and writes of a body. A response that keeps arriving doesn't time out. |
@@ -68,7 +67,7 @@ nohead = Nohead::Client.new(
 | `on_retry:` | | Called before each retry's wait. See [retries](#retries-and-idempotency). |
 | `rich_text:` | `"document"` | How rich text fields read: see [rich text](#rich-text). |
 
-An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`, `base_url: ""` uses `https://api.nohead.io`). The base URL comes only from `base_url:`, never from the environment. A `base_url:` that isn't `http` or `https` raises `Nohead::Error`.
+An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`).
 
 `with_options` gives a copy of the client with other settings (`timeout:`, `max_retries:`, `headers:`, added to the client's, `on_retry:` and `rich_text:`), sharing its project lookup:
 
