@@ -100,7 +100,7 @@ class ClientTest < Minitest::Test
 
   ME = { object: "principal", type: "api_key", user: nil,
          api_key: { id: "key_1", name: "Importer", scopes: [], published_only: false, project_id: "prj_9",
-                    expires_at: nil } }.freeze
+                    expires_at: nil, collections: nil } }.freeze
 
   def test_looks_up_the_project_once
     nohead, transport = client([json(200, ME), page([])], project_id: nil)
