@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Smoke test (Nohead spec §48.14): the core flow against a live API, with the
-# installed gem. Needs NOHEAD_API_URL (the API to test, passed as base_url:)
+# installed gem. Needs NOHEAD_API_URL (the API to test, read as base_url:)
 # and NOHEAD_API_KEY (a key with schema, records, assets and webhooks
 # read/write scopes). Exits non-zero on failure, after deleting what it
 # created.
@@ -28,11 +28,10 @@ rescue klass => e
   e
 end
 
-# The API to test. Required, so that a missing variable doesn't run the test
-# against production.
-base_url = ENV.fetch("NOHEAD_API_URL", "")
-expect(!base_url.empty?, "NOHEAD_API_URL is set to the API to test")
-nohead = Nohead::Client.new(base_url: base_url)
+# The API to test, which the client reads, with the key, as a script would.
+# Required, so that a missing variable doesn't run the test against production.
+expect(!ENV.fetch("NOHEAD_API_URL", "").empty?, "NOHEAD_API_URL is set to the API to test")
+nohead = Nohead::Client.new
 
 # What the test created and has not deleted yet, by resource: deleted at the
 # end, also when it fails.
@@ -91,6 +90,8 @@ begin
   expect(merged.data["title"] == "Uno, revised" && merged.published_at == published.published_at,
          "merging a draft changes the content, not the publication")
   expect(nohead.records.unpublish(first.id).published_at.nil?, "unpublish takes it back")
+  live = nohead.records.create(collection.slug, data: { title: "Live" }, publish: true)
+  expect(live.published_at && live.revision == 2, "create with publish creates it published")
 
   invalid = raises(Nohead::ValidationError) { nohead.records.create(collection.slug, data: {}) }
   expect(invalid && invalid.details.first&.field == "title", "validation errors name the field")
@@ -98,9 +99,10 @@ begin
   missing = raises(Nohead::NotFoundError) { nohead.records.get("rec_01J9ZQ3F8X5W2K7M4N6P0R1S2T") }
   expect(missing&.request_id&.start_with?("req_"), "API errors carry the request ID")
 
-  asset = nohead.assets.upload(StringIO.new("hello"), filename: "hello.txt")
+  asset = nohead.assets.upload(StringIO.new("hello"), filename: "hello.txt", alt: "A greeting")
   left[:assets] = asset.id
   expect(asset.status == "ready" && asset.byte_size == 5, "assets upload to storage")
+  expect(asset.alt == "A greeting", "upload sets alt text")
   expect(nohead.assets.update(asset.id, filename: "greeting.txt").filename == "greeting.txt", "assets rename")
   expect(nohead.assets.delete(asset.id).deleted_at, "assets soft-delete")
   nohead.assets.purge(asset.id)

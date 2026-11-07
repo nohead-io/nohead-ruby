@@ -50,7 +50,7 @@ module Nohead
     # api_key::     A project API key ("nohead_sk_...", or "nohead_pk_..." when
     #               published-only). Defaults to NOHEAD_API_KEY.
     # base_url::    The API's address, an http or https URL. Defaults to
-    #               https://api.nohead.io (the environment isn't read for it).
+    #               NOHEAD_API_URL, as the CLI reads it, then https://api.nohead.io.
     # project_id::  The key's project. Looked up once with GET /v1/me when omitted.
     # max_retries:: Retries of failed requests (see the README, "Retries").
     # timeout::     The longest wait in seconds without progress, per attempt:
@@ -70,7 +70,11 @@ module Nohead
                    headers: {}, warnings: true, on_retry: nil, rich_text: nil, transport: Transport.new)
       @api_key = present(api_key) || present(ENV.fetch("NOHEAD_API_KEY", nil)) or
         raise Error, "Missing API key: pass api_key or set NOHEAD_API_KEY"
-      @base_url = checked_base_url(present(base_url) || DEFAULT_BASE_URL)
+      # NOHEAD_API_URL, as the CLI reads it, so one environment points both
+      # at the same API.
+      from_env = present(ENV.fetch("NOHEAD_API_URL", nil)) unless present(base_url)
+      @base_url = checked_base_url(present(base_url) || from_env || DEFAULT_BASE_URL,
+                                   from_env ? "NOHEAD_API_URL" : "base_url")
       @project = ProjectLookup.new(present(project_id))
       @max_retries = max_retries
       @timeout = timeout
@@ -340,7 +344,8 @@ module Nohead
       raise ArgumentError, "if_match takes a revision number, or a record, draft or hash with a revision"
     end
 
-    def checked_base_url(url)
+    # The error names where the URL came from (`source`).
+    def checked_base_url(url, source)
       # A loop rather than a regex, which backtracks on long runs of slashes.
       url = url.to_s
       stop = url.length
@@ -349,9 +354,9 @@ module Nohead
       uri = URI.parse(url)
       return url if %w[http https].include?(uri.scheme&.downcase) && !uri.host.to_s.empty?
 
-      raise Error, "base_url must be an http or https URL"
+      raise Error, "#{source} must be an http or https URL"
     rescue URI::InvalidURIError
-      raise Error, "base_url must be an http or https URL"
+      raise Error, "#{source} must be an http or https URL"
     end
 
     def parse(response)

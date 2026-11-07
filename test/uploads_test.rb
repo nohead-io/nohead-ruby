@@ -39,6 +39,14 @@ class UploadsTest < Minitest::Test
     end
   end
 
+  def test_sends_alt_text_with_the_start_of_the_upload_and_none_unless_given
+    nohead, transport = client([created, stored, ready, created, stored, ready])
+    nohead.assets.upload(StringIO.new("x"), filename: "harbour.png", alt: "A harbour")
+    assert_equal "A harbour", transport.requests[0].json["alt"]
+    nohead.assets.upload(StringIO.new("x"), filename: "harbour.png")
+    refute transport.requests[3].json.key?("alt")
+  end
+
   def test_uses_an_idempotency_key_only_to_start_the_upload
     nohead, transport = client([created, json(200, asset("pending")), stored, ready])
     assert_equal "ready", nohead.assets.upload(StringIO.new("x"), idempotency_key: "k1").status
