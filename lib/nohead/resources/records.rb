@@ -61,10 +61,12 @@ module Nohead
         @client.request("records_get", path: { record_id: record }, query: { expand: expand }, rich_text: rich_text)
       end
 
-      # Creates an unpublished record: create("posts", data: { title: "Hello" }).
-      # With upsert_on:, the key of a unique field, it updates the record holding
-      # that value instead, if one exists, so a sync can run again without
-      # duplicates; if_match: then applies to that update.
+      # Creates an unpublished record: create("posts", data: { title: "Hello" }),
+      # or with publish: true a published one, in one request. With upsert_on:,
+      # the key of a unique field, it updates the record holding that value
+      # instead, if one exists, so a sync can run again without duplicates;
+      # if_match: then applies to that update (and with publish: true, a record
+      # already published stays published).
       def create(collection, if_match: nil, idempotency_key: nil, change_note: nil, rich_text: nil, **params)
         @client.request("records_create", path: { collection_id: collection }, body: body_of(params),
                                           if_match: if_match, idempotency_key: idempotency_key,

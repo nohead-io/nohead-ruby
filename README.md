@@ -59,6 +59,7 @@ nohead = Nohead::Client.new(
 | Option | Default | |
 |---|---|---|
 | `api_key:` | `NOHEAD_API_KEY` | A project API key (`nohead_sk_...`, or `nohead_pk_...` when published-only). Required. |
+| `base_url:` | `NOHEAD_API_URL`, else `https://api.nohead.io` | The API's address. The CLI reads the same variable, so one environment points both at the same API. |
 | `project_id:` | the key's project | Looked up once with `GET /v1/me` when omitted. |
 | `max_retries:` | `2` | See [retries](#retries-and-idempotency). |
 | `timeout:` | `60` | The longest wait in seconds without progress, per attempt: connecting, waiting for the response, and between reads and writes of a body. A response that keeps arriving doesn't time out. |
@@ -67,7 +68,7 @@ nohead = Nohead::Client.new(
 | `on_retry:` | | Called before each retry's wait. See [retries](#retries-and-idempotency). |
 | `rich_text:` | `"document"` | How rich text fields read: see [rich text](#rich-text). |
 
-An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`).
+An empty string is the same as leaving an option out (`api_key: ""` reads `NOHEAD_API_KEY`), and an empty environment variable the same as an unset one.
 
 `with_options` gives a copy of the client with other settings (`timeout:`, `max_retries:`, `headers:`, added to the client's, `on_retry:` and `rich_text:`), sharing its project lookup:
 
@@ -92,6 +93,8 @@ nohead.records.delete(post.id) # soft delete; records.restore undoes it
 Methods return the API's resources (see [Results](#results)) and raise on failure. Field values are under `data`, keyed by field API key.
 
 **Upserts.** With `upsert_on:`, the key of a `unique` field, `create` updates the record holding that value instead, if one exists, so a content sync can run again without duplicates: `nohead.records.create("products", data: { sku: "TEE-01", title: "Tee" }, upsert_on: "sku")`.
+
+**Creating it published.** `publish: true` creates the record published, in one request and one transaction, so it is never unpublished in between (the key's `records:write` scope covers it, as it covers publishing). With `upsert_on:`, a record already published stays published: `nohead.records.create("posts", data: { title: "Hello" }, publish: true)`.
 
 **More:**
 
@@ -236,7 +239,7 @@ end
 ## Assets
 
 ```ruby
-asset = nohead.assets.upload("cover.jpg")
+asset = nohead.assets.upload("cover.jpg", alt: "The harbour at dawn") # alt: is optional
 nohead.records.update(id, data: { cover: asset.id })
 ```
 

@@ -7,6 +7,7 @@ module Nohead
       # Uploads a file and returns the `ready` asset: creates the upload, sends
       # the bytes straight to storage, then completes it (which checks the
       # file). `file` is a path or an IO; for bytes, pass StringIO.new(bytes).
+      # `alt:` is its alt text from the start, as `update` would set it later.
       # Raises UploadError if the bytes don't reach storage (it refuses them,
       # can't be reached or times out, with the ConnectionError as its
       # `cause`), and ValidationError if the file fails the checks.
@@ -16,12 +17,13 @@ module Nohead
       # returned without sending the bytes again. Once the upload's URL has
       # expired (`upload.expires_at`), it raises UploadError: start over with
       # a new key.
-      def upload(file, filename: nil, content_type: nil, byte_size: nil, idempotency_key: nil)
+      def upload(file, filename: nil, content_type: nil, byte_size: nil, alt: nil, idempotency_key: nil)
         source = UploadSource.new(file, filename: filename, content_type: content_type,
                                         byte_size: byte_size)
         begin
           created = create_upload(filename: source.filename, content_type: source.content_type,
-                                  byte_size: source.byte_size, idempotency_key: idempotency_key)
+                                  byte_size: source.byte_size, **{ alt: alt }.compact,
+                                  idempotency_key: idempotency_key)
           # A replayed start returns the first run's asset, which may be done.
           if idempotency_key
             current = get(created.id)
