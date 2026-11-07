@@ -23,6 +23,14 @@ class RequestsTest < Minitest::Test
     assert_equal "/v1/records/...", transport.requests.first.path
   end
 
+  def test_creates_a_record_published_upserting_in_one_request
+    nohead, transport = client([json(201, record("rec_1"))])
+    nohead.records.create("pages", data: { slug: "about" }, upsert_on: "slug", publish: true)
+    assert_equal 1, transport.requests.size
+    assert_equal({ "data" => { "slug" => "about" }, "upsert_on" => "slug", "publish" => true },
+                 transport.requests.first.json)
+  end
+
   def test_serializes_filters_sorts_and_expansions
     nohead, transport = client([page([])])
     nohead.records.list("posts", filter: { category: "news", featured: true, views: 3,

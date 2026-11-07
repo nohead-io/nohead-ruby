@@ -22,6 +22,10 @@ module Clock
 end
 Time.singleton_class.prepend(Clock)
 
+# The client reads NOHEAD_API_URL: one in the shell mustn't move the tests off
+# their fake API.
+ENV.delete("NOHEAD_API_URL")
+
 # A test that made no assertions checks nothing: it fails. (assert_raises
 # and refute count; a test that already failed or was skipped is left be.)
 Minitest::Test.prepend(Module.new do
