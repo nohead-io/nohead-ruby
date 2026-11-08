@@ -243,7 +243,7 @@ asset = nohead.assets.upload("cover.jpg", alt: "The harbour at dawn") # alt: is 
 nohead.records.update(id, data: { cover: asset.id })
 ```
 
-**Images.** Image URLs are open: an image's `image_url` serves the whole image, and any of [imgproxy's processing options](https://docs.imgproxy.net/usage/processing) written into it transform it. `Nohead::Images.url` builds them without a request:
+**Images.** Image URLs are open: an image's `image_url` serves the whole image, and [imgproxy's processing options](https://docs.imgproxy.net/usage/processing) written into it transform it: the open-source ones, [listed in the docs](https://docs.nohead.io/guides/images#supported-options). Any other, such as imgproxy Pro's `sa` (saturation), would answer 404, so `Nohead::Images.url` refuses it, naming the option. It builds them without a request:
 
 ```ruby
 Nohead::Images.url(asset, width: 1200, height: 630, fit: "cover", gravity: "sm", format: "webp")

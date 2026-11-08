@@ -2,13 +2,25 @@
 
 module Nohead
   # Image renditions without a request. Image URLs are open: an image asset's
-  # `image_url` serves the whole image, and any of imgproxy's processing
-  # options written into it transform it
-  # (https://docs.imgproxy.net/usage/processing).
+  # `image_url` serves the whole image, and imgproxy's open-source processing
+  # options written into it transform it (listed at
+  # https://docs.nohead.io/guides/images#supported-options). Any other, such as
+  # imgproxy Pro's `sa`, `mc` or `co`, would answer 404, so `url` refuses it.
   #
   #   Nohead::Images.url(asset, width: 800, height: 600, fit: "cover", format: "webp")
   module Images
     FITS = { "contain" => "fit", "cover" => "fill", "fill" => "force" }.freeze
+
+    # The processing options image URLs take, by short and long name.
+    SUPPORTED = %w[
+      rs resize s size rt resizing_type w width h height mw min-width mh min-height
+      z zoom dpr el enlarge ex extend exar extend_aspect_ratio g gravity c crop
+      t trim pd padding ar auto_rotate rot rotate fl flip bg background bl blur
+      sh sharpen pix pixelate q quality fq format_quality f format ext
+      kcr keep_copyright scp strip_color_profile ph preserve_hdr
+      eth enforce_thumbnail cb cachebuster exp expires fn filename
+      att return_attachment pr preset
+    ].to_set.freeze
 
     module_function
 
@@ -23,6 +35,7 @@ module Nohead
       options = [*options].reject { |option| option.to_s.empty? }
       base = base_of(image)
       check_options([gravity, *options])
+      options.each { |option| check_supported(option.to_s) }
       at = base.index("/plain/")
       dpr = number(dpr)
       quality = number(quality)
@@ -67,6 +80,17 @@ module Nohead
       raise ArgumentError, "Not an imgproxy option: #{bad}" if bad
     end
     private_class_method :check_options
+
+    # Refuses an option image URLs don't take, naming it. The only preset is preview_url's.
+    def check_supported(option)
+      name, args = option.split(":", 2)
+      preset = %w[pr preset].include?(name) && args != "preview"
+      return if SUPPORTED.include?(name) && !preset
+
+      raise ArgumentError, "#{preset ? option : name} isn't an option Nohead image URLs take (imgproxy Pro's, " \
+                           "such as sa, mc or co, aren't available): https://docs.nohead.io/guides/images#supported-options"
+    end
+    private_class_method :check_supported
 
     # The source comes last; a format replaces any the URL already names.
     def source(source, format)
