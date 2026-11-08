@@ -38,6 +38,19 @@ class ImagesTest < Minitest::Test
     assert_equal BASE, Nohead::Images.url(BASE, fit: nil)
   end
 
+  def test_refuses_options_image_urls_dont_take_by_name
+    %w[sa:0 mc:1 co:10 min_width:50 pr:other pr pr:preview:other].each do |option|
+      error = assert_raises(ArgumentError) { Nohead::Images.url(BASE, options: [option]) }
+      assert_match(/isn't an option Nohead image URLs take/, error.message)
+    end
+    refused = ->(option) { assert_raises(ArgumentError) { Nohead::Images.url(BASE, options: [option]) }.message }
+    assert_match(/\Asa isn't/, refused.call("sa:0"))
+    assert_match(/\Apr:other isn't/, refused.call("pr:other"))
+    # Short and long names alike.
+    assert_equal at("blur:2/min-width:50/pr:preview"),
+                 Nohead::Images.url(BASE, options: ["blur:2", "min-width:50", "pr:preview"])
+  end
+
   def test_refuses_options_that_would_break_the_path
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, gravity: "fp:0.5/0.3") }
     assert_raises(ArgumentError) { Nohead::Images.url(BASE, options: ["bl:2@x"]) }
