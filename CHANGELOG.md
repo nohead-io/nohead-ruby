@@ -7,10 +7,14 @@ section is its GitHub release's notes.
 
 ## Unreleased
 
-- **Breaking:** `Nohead::Images.url` refuses a processing option image URLs don't take,
-  naming it, instead of building a URL that answers 404: imgproxy Pro's
-  options, such as `sa`, `mc` or `co`, and presets other than `pr:preview`.
-  The ones image URLs take are listed in the images guide.
+- **Breaking:** `Nohead::Images.url` refuses a processing option image URLs
+  don't take, naming it, instead of building a URL that answers 404: imgproxy
+  Pro's options, such as `sa`, `mc` or `co`, and presets other than
+  `pr:preview`. The ones image URLs take are listed in the images guide.
+- Uploads send a content type only when one is given; without it, the API
+  types the file by its filename, the same for every client and from a far
+  wider list than the SDKs knew (a `.mov` is `video/quicktime` and gets a
+  `media_url`). The SDKs' own extension table is gone.
 
 ## 0.18.0
 

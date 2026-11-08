@@ -28,7 +28,8 @@ class UploadsTest < Minitest::Test
       assert_equal(["POST api.test/v1/projects/prj_1/assets", "PUT storage.test/uploads/prj_1/ast_1",
                     "POST api.test/v1/assets/ast_1/complete"],
                    transport.requests.map { |request| "#{request.method} #{request.uri.host}#{request.path}" })
-      assert_equal({ "filename" => "a.png", "content_type" => "image/png", "byte_size" => 3 },
+      # No type given: the API types the file by its name.
+      assert_equal({ "filename" => "a.png", "byte_size" => 3 },
                    transport.requests.first.json)
       put = transport.requests[1]
       assert_equal "\x01\x02\x03".b, put.body.b
@@ -84,22 +85,25 @@ class UploadsTest < Minitest::Test
   def test_uploads_bytes_in_a_stringio
     nohead, transport = client([created, stored, ready])
     nohead.assets.upload(StringIO.new("0123456789"), filename: "data.bin")
-    assert_equal({ "filename" => "data.bin", "content_type" => "application/octet-stream",
-                   "byte_size" => 10 }, transport.requests.first.json)
+    assert_equal({ "filename" => "data.bin", "byte_size" => 10 }, transport.requests.first.json)
+  end
+
+  def test_sends_a_content_type_only_when_given
+    nohead, transport = client([created, stored, ready])
+    nohead.assets.upload(StringIO.new("x"), filename: "notes.md", content_type: "text/plain")
+    assert_equal "text/plain", transport.requests.first.json["content_type"]
   end
 
   def test_an_empty_filename_or_content_type_is_the_default
     nohead, transport = client([created, stored, ready])
     nohead.assets.upload(StringIO.new("x"), filename: "", content_type: "")
-    assert_equal({ "filename" => "upload", "content_type" => "application/octet-stream", "byte_size" => 1 },
-                 transport.requests.first.json)
+    assert_equal({ "filename" => "upload", "byte_size" => 1 }, transport.requests.first.json)
     Dir.mktmpdir do |dir|
       path = File.join(dir, "a.png")
       File.binwrite(path, "x")
       nohead, transport = client([created, stored, ready])
       nohead.assets.upload(path, filename: "", content_type: "")
-      assert_equal({ "filename" => "a.png", "content_type" => "image/png", "byte_size" => 1 },
-                   transport.requests.first.json)
+      assert_equal({ "filename" => "a.png", "byte_size" => 1 }, transport.requests.first.json)
     end
   end
 

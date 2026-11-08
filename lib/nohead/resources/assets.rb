@@ -21,8 +21,8 @@ module Nohead
         source = UploadSource.new(file, filename: filename, content_type: content_type,
                                         byte_size: byte_size)
         begin
-          created = create_upload(filename: source.filename, content_type: source.content_type,
-                                  byte_size: source.byte_size, **{ alt: alt }.compact,
+          created = create_upload(filename: source.filename, byte_size: source.byte_size,
+                                  **{ content_type: source.content_type, alt: alt }.compact,
                                   idempotency_key: idempotency_key)
           # A replayed start returns the first run's asset, which may be done.
           if idempotency_key
