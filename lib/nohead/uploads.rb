@@ -6,15 +6,6 @@ module Nohead
   # Reading files for assets.upload: a path (String or Pathname) or an IO
   # opened in binary mode (File, StringIO).
   class UploadSource
-    CONTENT_TYPES = {
-      ".avif" => "image/avif", ".gif" => "image/gif", ".jpeg" => "image/jpeg",
-      ".jpg" => "image/jpeg", ".png" => "image/png", ".svg" => "image/svg+xml",
-      ".webp" => "image/webp", ".pdf" => "application/pdf", ".json" => "application/json",
-      ".txt" => "text/plain", ".md" => "text/markdown", ".csv" => "text/csv",
-      ".mp3" => "audio/mpeg", ".mp4" => "video/mp4", ".webm" => "video/webm",
-      ".zip" => "application/zip"
-    }.freeze
-
     attr_reader :filename, :content_type, :byte_size, :io
 
     def initialize(file, filename: nil, content_type: nil, byte_size: nil)
@@ -23,8 +14,8 @@ module Nohead
       @filename = present(filename) || present(name) || "upload"
       @byte_size = byte_size || size or
         raise UploadError, "Uploading a stream that cannot seek needs byte_size:"
-      @content_type = present(content_type) ||
-                      CONTENT_TYPES.fetch(File.extname(@filename).downcase, "application/octet-stream")
+      # Without one, the API types the file by its filename, as for every client.
+      @content_type = present(content_type)
       @start = position(@io)
     end
 
