@@ -72,23 +72,18 @@ class PaginationTest < Minitest::Test
     assert_equal "saved", transport.requests.first.params["cursor"]
   end
 
-  def test_searches_assets_and_lists_them_by_kind
-    nohead, transport = client([page([]), page([])])
+  # The contract test sends these too; this pins their form on the wire.
+  def test_lists_assets_by_search_kind_and_content_type
+    nohead, transport = client([page([])])
     nohead.assets.list(q: "hero jpg", kind: "image").data
-    nohead.assets.list(kind: %w[image video]).data
-    assert_equal({ "q" => "hero jpg", "filter[kind]" => "image" }, transport.requests[0].params)
-    assert_equal({ "filter[kind][in]" => "image,video" }, transport.requests[1].params)
-  end
-
-  def test_lists_assets_by_content_type
-    nohead, transport = client([page([]), page([]), page([])])
+    nohead.assets.list(kind: %w[image video], content_type: %w[image/* application/pdf]).data
     nohead.assets.list(content_type: "image/*").data
-    nohead.assets.list(content_type: %w[image/* application/pdf]).data
     nohead.assets.list(content_type: []).data
-    assert_equal "image/*", transport.requests[0].params["filter[content_type]"]
-    assert_equal "image/*,application/pdf", transport.requests[1].params["filter[content_type][in]"]
-    # An empty list, like an asset field's accepted_types, is any type.
-    assert_empty transport.requests[2].params.keys.grep(/content_type/)
+    assert_equal [{ "q" => "hero jpg", "filter[kind]" => "image" },
+                  { "filter[kind][in]" => "image,video", "filter[content_type][in]" => "image/*,application/pdf" },
+                  { "filter[content_type]" => "image/*" },
+                  {}], # an empty list, like an asset field's accepted_types, is any type
+                 transport.requests.map(&:params)
   end
 
   def test_a_list_response_that_is_not_a_page

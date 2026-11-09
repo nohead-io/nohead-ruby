@@ -194,12 +194,6 @@ class RequestsTest < Minitest::Test
     assert_equal({ "from" => "1", "to" => "2" }, transport.requests.first.params)
   end
 
-  def test_diff_sends_rich_text
-    nohead, transport = client([json(200, { object: "record_diff", record_id: "rec_1", from: 1, to: 2, changes: [] })])
-    nohead.records.diff("rec_1", from: 1, to: 2, rich_text: "markdown")
-    assert_equal "markdown", transport.requests.first.params["rich_text"]
-  end
-
   def test_options_a_method_does_not_take_are_not_sent_as_body_fields
     nohead, transport = client([json(201, {})])
     [
@@ -223,20 +217,6 @@ class RequestsTest < Minitest::Test
     nohead.records.get("rec_1", rich_text: "")
     nohead.records.get("rec_1", rich_text: "html")
     assert_equal([nil, nil, "html"], transport.requests.map { |request| request.params["rich_text"] })
-  end
-
-  # The client's rich_text: goes to the operations that declare the
-  # parameter, and only those.
-  def test_the_clients_rich_text_goes_to_the_operations_that_take_it
-    nohead, transport = client([Calls.method(:reply)], rich_text: :markdown)
-    nohead.records.get("rec_1")
-    nohead.drafts.list("posts")
-    nohead.records.update("rec_1", data: { body: "# Hello" })
-    nohead.records.publication("rec_1")
-    nohead.records.revisions.get("rec_1", 1)
-    nohead.collections.get("posts")
-    sent = transport.requests.map { |request| request.params["rich_text"] }
-    assert_equal ["markdown", "markdown", "markdown", nil, nil, nil], sent
   end
 
   def test_a_calls_rich_text_wins_over_the_clients

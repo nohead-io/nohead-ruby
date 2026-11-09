@@ -2,60 +2,43 @@
 
 require_relative "test_helper"
 
+# How the transport sets up Net::HTTP, and what it makes of Net::HTTP's
+# errors. What goes over the wire is network_test.rb's.
 class TransportTest < Minitest::Test
   FakeResponse = Struct.new(:code, :body) do
     def each_header = { "content-type" => "application/json" }.each
   end
 
-  # While `reply` is set, Net::HTTP connections answer with it (called with
-  # the request) instead of reaching the network, and keep what was sent and
-  # the last connection.
-  module Offline
-    class << self
-      attr_accessor :reply, :sent, :connection
-    end
-
-    def start(&) = Offline.reply ? yield(self) : super
-
-    def request(request, *, &)
-      return super unless Offline.reply
-
-      Offline.sent << request
-      Offline.connection = self
-      Offline.reply.call(request)
-    end
-  end
-  Net::HTTP.prepend(Offline)
-
+  # For the block, Net::HTTP.new hands out connections that answer with
+  # `reply` (called with the request) instead of reaching the network; yields
+  # them.
   def offline(reply)
-    Offline.reply = reply
-    Offline.sent = []
-    yield Offline.sent
-  ensure
-    Offline.reply = nil
-  end
-
-  def send_request(body = nil, headers = {})
-    Nohead::Transport.new.call("POST", "https://api.test/v1/records?x=1", headers, body, 5)
-  end
-
-  def test_sends_the_request_and_reads_the_response
-    offline(->(_) { FakeResponse.new("201", '{"id":"rec_1"}') }) do |sent|
-      response = send_request('{"data":{}}', { "Content-Type" => "application/json" })
-      assert_equal 201, response.status
-      assert_equal({ "content-type" => "application/json" }, response.headers)
-      assert_equal '{"id":"rec_1"}', response.body
-      assert_equal "POST", sent.first.method
-      assert_equal "/v1/records?x=1", sent.first.path
-      assert_equal "application/json", sent.first["Content-Type"]
-      assert_equal '{"data":{}}', sent.first.body
+    connections = []
+    http_class = Net::HTTP.singleton_class
+    real = http_class.instance_method(:new)
+    http_class.remove_method(:new) # redefining it would warn
+    http_class.define_method(:new) do |*args|
+      real.bind_call(self, *args).tap do |http|
+        http.define_singleton_method(:start) { |&block| block.call(self) }
+        http.define_singleton_method(:request) { |request, *| reply.call(request) }
+        connections << http
+      end
     end
+    yield connections
+  ensure
+    http_class.remove_method(:new)
+    http_class.define_method(:new, real)
+  end
+
+  def send_request
+    Nohead::Transport.new.call("POST", "https://api.test/v1/records?x=1", {}, nil, 5)
   end
 
   def test_sets_every_timeout
-    offline(->(_) { FakeResponse.new("200", "") }) do
+    offline(->(_) { FakeResponse.new("200", "") }) do |connections|
       send_request
-      http = Offline.connection
+      assert_equal 1, connections.size
+      http = connections.first
       assert_equal [5, 5, 5], [http.open_timeout, http.read_timeout, http.write_timeout]
       assert_equal 0, http.max_retries # the client's retries are the only ones
       assert_predicate http, :use_ssl?
@@ -63,37 +46,22 @@ class TransportTest < Minitest::Test
     end
   end
 
-  def test_streams_an_io_body
-    io = StringIO.new("bytes")
-    offline(->(_) { FakeResponse.new("200", "") }) do |sent|
-      send_request(io, { "Content-Length" => "5" })
-      assert_same io, sent.first.body_stream
-      assert_equal "5", sent.first["Content-Length"]
-    end
-  end
-
-  def test_timeouts_raise_timeout_error
-    [Net::OpenTimeout, Net::ReadTimeout].each do |error|
-      offline(->(_) { raise error }) do
-        assert_raises(Nohead::TimeoutError, error.name) { send_request }
-      end
-    end
-  end
-
-  def test_malformed_responses_raise_connection_error
-    [Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, Zlib::DataError].each do |error|
-      offline(->(_) { raise error, "wrong status line" }) do
-        raised = assert_raises(Nohead::ConnectionError, error.name) { send_request }
-        refute_kind_of Nohead::TimeoutError, raised
-        assert_equal "The response from api.test could not be read: wrong status line", raised.message
-      end
-    end
-  end
-
-  def test_unreachable_hosts_raise_connection_error
-    [Errno::ECONNREFUSED, SocketError].each do |error|
-      offline(->(_) { raise error }) do
-        assert_raises(Nohead::ConnectionError, error.name) { send_request }
+  # The real server in network_test.rb shows a stall and a broken status
+  # line; these are the rest.
+  def test_maps_net_http_errors
+    timeout = [Nohead::TimeoutError, "The request to api.test timed out after 5 s"]
+    unread = [Nohead::ConnectionError, "The response from api.test could not be read: broken"]
+    unreached = [Nohead::ConnectionError, "Could not reach api.test: broken"]
+    {
+      Net::OpenTimeout => timeout, Net::ReadTimeout => timeout, Net::WriteTimeout => timeout,
+      Net::HTTPBadResponse => unread, Net::HTTPHeaderSyntaxError => unread, Net::ProtocolError => unread,
+      Zlib::DataError => unread,
+      SocketError => unreached, IOError => unreached, OpenSSL::SSL::SSLError => unreached,
+      Errno::ECONNREFUSED => [Nohead::ConnectionError, "Could not reach api.test: Connection refused - broken"]
+    }.each do |error, (expected, message)|
+      offline(->(_) { raise error, "broken" }) do
+        raised = assert_raises(Nohead::Error, error.name) { send_request }
+        assert_equal [expected, message], [raised.class, raised.message], error.name
       end
     end
   end
