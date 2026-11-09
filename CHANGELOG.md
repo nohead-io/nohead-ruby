@@ -5,6 +5,11 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
+## 0.20.0
+
+- Nothing changed in the gem: the SDKs share one version, and this release
+  matches the TypeScript SDK's 0.20.0, whose reads changed.
+
 ## 0.19.0
 
 - **Breaking:** `Nohead::Images.url` refuses a processing option image URLs
