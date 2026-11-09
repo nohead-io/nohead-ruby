@@ -38,6 +38,25 @@ end)
 require_relative "fake_transport"
 
 module Helpers
+  def in_time_zone(zone)
+    saved = ENV.fetch("TZ", nil)
+    ENV["TZ"] = zone
+    yield
+  ensure
+    ENV["TZ"] = saved
+  end
+
+  # Whether the block came true within `seconds`, checking every millisecond.
+  def eventually?(seconds = 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+    until yield
+      return false if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+      sleep 0.001
+    end
+    true
+  end
+
   def at_time(time)
     Clock.now = time
     yield

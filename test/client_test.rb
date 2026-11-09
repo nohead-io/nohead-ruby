@@ -110,16 +110,33 @@ class ClientTest < Minitest::Test
                  transport.requests.map(&:path)
   end
 
+  # /v1/me answers once every other thread is asleep, waiting for the lookup
+  # (or after a second, when they don't wait), so they all ask while it is
+  # under way.
   def test_looks_up_the_project_once_for_threads_at_the_same_time
+    threads = []
+    released = false
     me = lambda do |request|
       next page([]) unless request.path == "/v1/me"
 
-      sleep 0.05 # long enough for every thread to need it
+      others = threads - [Thread.current]
+      eventually?(1) { released && others.all? { |thread| thread.status == "sleep" } }
       json(200, ME)
     end
     nohead, transport = client([me], project_id: nil)
-    Array.new(5) { Thread.new { nohead.collections.list } }.each(&:join)
+    threads.concat(Array.new(5) do
+      Thread.new do
+        Thread.current.report_on_exception = false # join raises it
+        Thread.stop || nohead.collections.list
+      end
+    end)
+    assert eventually? { threads.all?(&:stop?) }, "every thread starts"
+    threads.each(&:wakeup)
+    released = true # a thread asleep from now on is past Thread.stop
+    threads.each(&:join)
     assert_equal(1, transport.requests.count { |request| request.path == "/v1/me" })
+  ensure
+    threads.each(&:kill)
   end
 
   def test_with_options_is_a_copy_with_other_settings

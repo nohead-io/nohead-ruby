@@ -8,7 +8,8 @@ require_relative "local_server"
 class NetworkTest < Minitest::Test
   include Helpers
 
-  TIMEOUT = 0.3
+  # Short, to keep the waits short; the handlers' gaps stay well inside it.
+  TIMEOUT = 0.15
 
   def serve(handler, max_retries: 0, &)
     LocalServer.open(handler) do |server|
@@ -54,6 +55,8 @@ class NetworkTest < Minitest::Test
     reader = pipe("hello")
     serve(uploads(->(_, socket) { LocalServer.reply(socket, 200) })) do |nohead, server|
       assert_equal "ready", nohead.assets.upload(reader, filename: "a.txt", byte_size: 5).status
+      post = server.requests.first
+      assert_equal ["application/json", "a.txt"], [post.headers["content-type"], JSON.parse(post.body)["filename"]]
       put = server.requests.find { |request| request.method == "PUT" }
       assert_equal "5", put.headers["content-length"]
       refute put.chunked, "the upload is not chunked (storage's signature covers its length)"
@@ -95,11 +98,11 @@ class NetworkTest < Minitest::Test
   # The timeout is the longest wait without progress, not the whole request's.
   def test_a_response_that_keeps_arriving_does_not_time_out
     body = JSON.generate(record("rec_1", title: "Slow"))
-    pieces = body.chars.each_slice((body.size / 7.0).ceil).map(&:join)
+    pieces = Array.new(9) { |i| body[(i * body.size / 9)...((i + 1) * body.size / 9)] }
     handler = lambda do |_, socket|
       head(socket, body)
-      pieces.each do |piece|
-        sleep(TIMEOUT / 3)
+      pieces.each do |piece| # nine gaps of a quarter of the timeout: 2.25 timeouts in all
+        sleep(TIMEOUT / 4)
         socket.write(piece)
       end
     end
