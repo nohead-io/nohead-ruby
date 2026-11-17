@@ -50,6 +50,27 @@ class ErrorsTest < Minitest::Test
     assert_equal "required", error.details.first["code"]
   end
 
+  FIELD_ERRORS = {
+    "none" => [[], {}],
+    "one per field" => [[{ field: "title", code: "required", message: "is required" },
+                         { field: "slug", code: "taken", message: "is already used" }],
+                        { "title" => "is required", "slug" => "is already used" }],
+    "first message wins" => [[{ field: "title", code: "too_long", message: "is too long" },
+                              { field: "title", code: "invalid", message: "is invalid" }],
+                             { "title" => "is too long" }],
+    "none without a field" => [[{ code: "draft_exists", message: "has a draft" },
+                                { field: "", code: "required", message: "is required" }],
+                               {}]
+  }.freeze
+
+  FIELD_ERRORS.each do |name, (details, field_errors)|
+    define_method("test_field_errors_#{name.tr(' ', '_')}") do
+      error = failure(api_error(422, "validation_error", details: details))
+      assert_instance_of Nohead::ValidationError, error
+      assert_equal field_errors, error.field_errors
+    end
+  end
+
   def test_current_revision
     error = failure(api_error(412, "precondition_failed",
                               details: [{ code: "revision_mismatch", message: "...", current_revision: 7 }]))

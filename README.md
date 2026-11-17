@@ -179,7 +179,7 @@ Every error is a `Nohead::Error`. API errors are `Nohead::APIError`s with `statu
 | `NotFoundError` | 404 |
 | `ConflictError` | 409 |
 | `PreconditionFailedError` | 412 (`current_revision`) |
-| `ValidationError` | 422 |
+| `ValidationError` | 422 (`field_errors`) |
 | `RateLimitError` | 429 (`retry_after`) |
 | `InternalServerError` | 500 and other 5xx |
 | `ServiceUnavailableError` | 503 |
@@ -192,11 +192,14 @@ Other errors:
 - `Nohead::UploadError`
 - `Nohead::WebhookVerificationError`
 
+A form that writes a record shows a `ValidationError`'s `field_errors` beside its fields: the first message for each field, by its key. `details` has every problem with its `code` (`required`, `taken`), for words of your own.
+
 ```ruby
-begin
-  nohead.records.create("posts", data: {})
+def apply(name, email)
+  nohead.records.create("applications", data: { name: name, email: email })
+  { sent: true }
 rescue Nohead::ValidationError => e
-  e.details.each { |detail| puts "#{detail.field}: #{detail.message}" }
+  { sent: false, errors: e.field_errors } # { "email" => "is required" }
 end
 ```
 

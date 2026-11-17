@@ -67,7 +67,17 @@ module Nohead
     end
   end
 
-  class ValidationError < APIError; end
+  class ValidationError < APIError
+    # The first message for each field, by its key: { "title" => "is required" },
+    # to show beside a form's fields. Details without a field are left out;
+    # `details` keeps their codes.
+    def field_errors
+      details.each_with_object({}) do |detail, errors|
+        field = detail["field"]
+        errors[field] = detail["message"] unless field.to_s.empty? || errors.key?(field)
+      end
+    end
+  end
 
   class RateLimitError < APIError
     # Seconds to wait before retrying, from `Retry-After`.
