@@ -195,10 +195,11 @@ Other errors:
 A form that writes a record shows a `ValidationError`'s `field_errors` beside its fields: the first message for each field, by its key. `details` has every problem with its `code` (`required`, `taken`), for words of your own.
 
 ```ruby
-begin
+def apply(name, email)
   nohead.records.create("applications", data: { name: name, email: email })
+  { sent: true }
 rescue Nohead::ValidationError => e
-  return { errors: e.field_errors } # { "email" => "is required" }
+  { sent: false, errors: e.field_errors } # { "email" => "is required" }
 end
 ```
 
