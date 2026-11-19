@@ -90,9 +90,9 @@ module Nohead
   # The names of the timestamp fields in responses and webhook events.
   TIMESTAMPS = %w[
     at cancel_requested_at completed_at created_at deleted_at expires_at
-    last_attempt_at last_built_at merge_at next_attempt_at publish_at published_at
-    purge_after rebuild_requested_at started_at succeeded_at time unpublish_at
-    updated_at uploaded_at
+    failing_since last_attempt_at last_built_at last_succeeded_at merge_at next_attempt_at
+    publish_at published_at purge_after rebuild_requested_at started_at succeeded_at
+    time unpublish_at updated_at uploaded_at
   ].to_set.freeze
 
   # The objects whose `data` is a record's field values.
