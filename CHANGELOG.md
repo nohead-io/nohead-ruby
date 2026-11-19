@@ -5,6 +5,11 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
+## 0.23.0
+
+- A webhook's `failing_since` and `last_succeeded_at` (its health) are
+  read as `Time`, like its other timestamps.
+
 ## 0.22.0
 
 - `ValidationError#field_errors`: the first message for each field, by its
