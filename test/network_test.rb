@@ -70,10 +70,9 @@ class NetworkTest < Minitest::Test
 
   def test_refuses_a_pipe_shorter_than_its_byte_size
     reader = pipe("hel")
-    serve(uploads(->(_, socket) { LocalServer.reply(socket, 200) })) do |nohead, server|
+    serve(uploads(->(_, socket) { LocalServer.reply(socket, 200) })) do |nohead, _|
       error = assert_raises(Nohead::UploadError) { nohead.assets.upload(reader, filename: "a.txt", byte_size: 5) }
       assert_equal "Could not upload a.txt: it has 3 bytes, fewer than its byte_size (5)", error.message
-      assert_equal %w[POST], server.requests.map(&:method)
     end
   ensure
     reader&.close

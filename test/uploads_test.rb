@@ -119,6 +119,19 @@ class UploadsTest < Minitest::Test
     end
   end
 
+  # Its size on disk is 0, whatever it holds.
+  def test_uploads_a_named_pipe_with_its_byte_size
+    Dir.mktmpdir do |dir|
+      fifo = File.join(dir, "fifo")
+      File.mkfifo(fifo)
+      writer = Thread.new { File.binwrite(fifo, "hello") }
+      nohead, transport = client([created, stored, ready])
+      nohead.assets.upload(fifo, byte_size: 5)
+      assert writer.join(5), "the writer finished"
+      assert_equal "hello", transport.requests[1].body
+    end
+  end
+
   def test_uploads_bytes_in_a_stringio
     nohead, transport = client([created, stored, ready])
     nohead.assets.upload(StringIO.new("0123456789"), filename: "data.bin")

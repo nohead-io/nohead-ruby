@@ -67,7 +67,8 @@ module Nohead
     def open_path(path)
       @io = path.open("rb")
       @owned = true
-      [path.basename.to_s, path.size]
+      # A pipe's or a device's size (/dev/stdin) is not what it holds.
+      [path.basename.to_s, path.file? ? path.size : nil]
     end
 
     def open_io(io)
