@@ -13,8 +13,8 @@ module Nohead
   # with the same `call`, e.g. for tests.
   class Transport
     # `body` is a String, nil, or, for an upload, a stream to send with its
-    # Content-Length: it reads as an IO does, `read(length = nil, buffer =
-    # nil)`, up to that length.
+    # Content-Length: it reads as an IO does (`read(length = nil, buffer =
+    # nil)` and `readpartial(length, buffer = nil)`), up to that length.
     def call(method, url, headers, body, timeout)
       uri = URI(url)
       request = Net::HTTPGenericRequest.new(method, !body.nil?, true, uri.request_uri, headers)

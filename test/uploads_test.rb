@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "timeout"
 require "tmpdir"
 
 class UploadsTest < Minitest::Test
@@ -125,10 +126,23 @@ class UploadsTest < Minitest::Test
       fifo = File.join(dir, "fifo")
       File.mkfifo(fifo)
       writer = Thread.new { File.binwrite(fifo, "hello") }
+      begin
+        nohead, transport = client([created, stored, ready])
+        nohead.assets.upload(fifo, byte_size: 5)
+        assert writer.join(5), "the writer finished"
+        assert_equal "hello", transport.requests[1].body
+      ensure
+        writer.kill # blocked opening the pipe if the upload never did
+      end
+    end
+  end
+
+  # A device's size (0) isn't what it holds: its byte_size is.
+  def test_uploads_a_device_with_its_byte_size
+    File.open("/dev/zero", "rb") do |zero|
       nohead, transport = client([created, stored, ready])
-      nohead.assets.upload(fifo, byte_size: 5)
-      assert writer.join(5), "the writer finished"
-      assert_equal "hello", transport.requests[1].body
+      nohead.assets.upload(zero, byte_size: 5)
+      assert_equal "\0" * 5, transport.requests[1].body
     end
   end
 
@@ -159,6 +173,43 @@ class UploadsTest < Minitest::Test
       end
       super
     end
+  end
+
+  # Reads the upload as http.rb does: what it has so far, then (once `more`
+  # has run) the rest.
+  class PartialTransport < FakeTransport
+    attr_reader :partial
+
+    def initialize(replies, more)
+      super(replies)
+      @more = more
+    end
+
+    def call(method, url, headers, body, timeout)
+      if body.respond_to?(:read)
+        @partial = body.readpartial(1024)
+        @more.call
+        body = @partial + body.read
+      end
+      super
+    end
+  end
+
+  def test_a_transport_reads_what_a_pipe_has_so_far
+    reader, writer = IO.pipe
+    writer.write("hello")
+    transport = PartialTransport.new([created, stored, ready], lambda {
+      writer.write(" world!")
+      writer.close
+    })
+    nohead = Nohead::Client.new(api_key: "nohead_sk_test", base_url: "https://api.test", project_id: "prj_1",
+                                transport: transport)
+    Timeout.timeout(5) { nohead.assets.upload(reader, byte_size: 11) }
+    assert_equal "hello", transport.partial
+    assert_equal "hello world", transport.requests[1].body
+  ensure
+    reader&.close
+    writer&.close
   end
 
   def test_a_transport_of_its_own_reads_the_upload_as_an_io

@@ -45,6 +45,22 @@ module Nohead
       chunk
     end
 
+    # As IO#readpartial: what the file has ready, so a pipe streams as it
+    # fills (IO.copy_stream, and so Net::HTTP, reads with it), up to
+    # byte_size in all.
+    def readpartial(length, buffer = nil)
+      return read(length, buffer) || raise(EOFError) unless @io.respond_to?(:readpartial)
+      raise EOFError if @left.zero?
+
+      chunk = @io.readpartial([length, @left].min, buffer)
+      @left -= chunk.bytesize
+      chunk
+    rescue EOFError
+      raise too_short(byte_size - @left) unless @left.zero?
+
+      raise
+    end
+
     # Whether the bytes can be sent again (for retries): a pipe or socket
     # can't seek back to where they start.
     def replayable? = !@start.nil? && @io.respond_to?(:pos=)
@@ -98,6 +114,8 @@ module Nohead
     end
 
     def remaining(io)
+      # A device's size (File.open("/dev/stdin")) is not what it holds.
+      return nil if io.respond_to?(:stat) && !io.stat.file?
       return io.size - io.pos if io.respond_to?(:size) && io.respond_to?(:pos)
 
       nil
