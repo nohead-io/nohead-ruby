@@ -82,6 +82,39 @@ class UploadsTest < Minitest::Test
     assert_equal %w[POST PUT POST], transport.requests.map(&:method)
   end
 
+  # Files of "hello world", by kind: each its own test.
+  SOURCES = {
+    "stringio" => ->(_dir) { StringIO.new("hello world") },
+    "path" => ->(dir) { File.join(dir, "a.txt").tap { |path| File.binwrite(path, "hello world") } },
+    "pipe" => lambda do |_dir|
+      reader, writer = IO.pipe
+      writer.write("hello world")
+      writer.close
+      reader
+    end
+  }.freeze
+
+  SOURCES.each do |kind, source|
+    define_method("test_sends_byte_size_bytes_at_most_of_a_#{kind}") do
+      Dir.mktmpdir do |dir|
+        nohead, transport = client([created, stored, ready])
+        nohead.assets.upload(source.call(dir), filename: "a.txt", byte_size: 5)
+        assert_equal 5, transport.requests[0].json["byte_size"]
+        assert_equal "hello", transport.requests[1].body
+      end
+    end
+
+    define_method("test_refuses_a_#{kind}_shorter_than_its_byte_size") do
+      Dir.mktmpdir do |dir|
+        nohead, = client([created, stored, ready])
+        error = assert_raises(Nohead::UploadError) do
+          nohead.assets.upload(source.call(dir), filename: "a.txt", byte_size: 20)
+        end
+        assert_match(/\ACould not upload a.txt: it has 11 bytes, fewer/, error.message)
+      end
+    end
+  end
+
   def test_uploads_bytes_in_a_stringio
     nohead, transport = client([created, stored, ready])
     nohead.assets.upload(StringIO.new("0123456789"), filename: "data.bin")

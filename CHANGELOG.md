@@ -9,6 +9,8 @@ section is its GitHub release's notes.
 
 - A `base_url` with an IPv6 address (`http://[::1]:3000`) connects; it
   failed to resolve the bracketed address.
+- `assets.upload` sends at most `byte_size` bytes of a file, and raises
+  `UploadError` when the file has fewer; it sent every byte the file had.
 
 ## 0.23.0
 

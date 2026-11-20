@@ -6,7 +6,7 @@ module Nohead
   # Reading files for assets.upload: a path (String or Pathname) or an IO
   # opened in binary mode (File, StringIO).
   class UploadSource
-    attr_reader :filename, :content_type, :byte_size, :io
+    attr_reader :filename, :content_type, :byte_size
 
     def initialize(file, filename: nil, content_type: nil, byte_size: nil)
       name, size = file.is_a?(String) || file.is_a?(Pathname) ? open_path(Pathname(file)) : open_io(file)
@@ -17,6 +17,23 @@ module Nohead
       # Without one, the API types the file by its filename, as for every client.
       @content_type = present(content_type)
       @start = position(@io)
+      @left = @byte_size
+    end
+
+    # The bytes for the transport, as IO#read reads them: the first
+    # byte_size, the length the upload declared. Raises UploadError when the
+    # file ends sooner.
+    def read(length = nil, buffer = nil)
+      return (length ? nil : +"") if @left.zero?
+
+      chunk = @io.read(length ? [length, @left].min : @left, buffer)
+      size = chunk.to_s.bytesize
+      if chunk.nil? || (length.nil? && size < @left)
+        raise UploadError, "Could not upload #{filename}: it has #{byte_size - @left + size} bytes, " \
+                           "fewer than its byte_size (#{byte_size})"
+      end
+      @left -= size
+      chunk
     end
 
     # Whether the bytes can be sent again (for retries): a pipe or socket
@@ -25,6 +42,7 @@ module Nohead
 
     def rewind
       @io.pos = @start if replayable?
+      @left = @byte_size
     end
 
     def close
