@@ -11,8 +11,9 @@ section is its GitHub release's notes.
   failed to resolve the bracketed address.
 - `assets.upload` sends at most `byte_size` bytes of a file, and raises
   `UploadError` when the file has fewer; it sent every byte the file had.
-  A path that isn't a file, such as a named pipe or `/dev/stdin`, needs
-  `byte_size`, as a stream does: its size on disk isn't what it holds.
+  A path or an open file that isn't a regular file, such as a named pipe
+  or `/dev/stdin`, needs `byte_size`, as a stream does: its size on disk
+  isn't what it holds.
 - A `transport:` of your own gets an upload's body as an object that reads
   as an IO does (`read` and `readpartial`) and stops at `byte_size`, rather
   than the file itself.
