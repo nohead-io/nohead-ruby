@@ -11,8 +11,8 @@ class NetworkTest < Minitest::Test
   # Short, to keep the waits short; the handlers' gaps stay well inside it.
   TIMEOUT = 0.15
 
-  def serve(handler, max_retries: 0, &)
-    LocalServer.open(handler) do |server|
+  def serve(handler, max_retries: 0, host: "127.0.0.1", &)
+    LocalServer.open(handler, host: host) do |server|
       nohead = Nohead::Client.new(api_key: "nohead_sk_test", base_url: server.url(""), project_id: "prj_1",
                                   max_retries: max_retries, timeout: TIMEOUT)
       yield nohead, server
@@ -150,6 +150,14 @@ class NetworkTest < Minitest::Test
         assert_equal [status, "redirect"], [error.status, error.type]
         assert_equal ["/v1/records/rec_1"], server.requests.map(&:path)
       end
+    end
+  end
+
+  def test_reaches_an_ipv6_address
+    serve(->(_, socket) { LocalServer.reply(socket, 204) }, host: "::1") do |nohead, server|
+      nohead.webhooks.delete("wh_1")
+      hosts = server.requests.map { |request| request.headers["host"] }
+      assert_equal ["[::1]:#{server.port}"], hosts
     end
   end
 
