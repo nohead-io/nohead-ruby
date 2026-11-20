@@ -165,8 +165,11 @@ class UploadsTest < Minitest::Test
   # A transport of one's own reads the upload as an IO, here as Net::HTTP
   # does (IO.copy_stream, in chunks into a buffer): byte_size bytes.
   class CopyingTransport < FakeTransport
+    attr_reader :size
+
     def call(method, url, headers, body, timeout)
       if body.respond_to?(:read)
+        @size = body.size
         copy = StringIO.new
         IO.copy_stream(body, copy)
         body = copy.string
@@ -217,6 +220,7 @@ class UploadsTest < Minitest::Test
     nohead = Nohead::Client.new(api_key: "nohead_sk_test", base_url: "https://api.test", project_id: "prj_1",
                                 transport: transport)
     nohead.assets.upload(StringIO.new("hello world"), byte_size: 5)
+    assert_equal 5, transport.size
     assert_equal "hello", transport.requests[1].body
   end
 
@@ -224,8 +228,26 @@ class UploadsTest < Minitest::Test
   def test_needs_byte_size_for_a_path_that_is_not_a_file
     nohead, transport = client([created])
     error = assert_raises(Nohead::UploadError) { nohead.assets.upload(File::NULL, filename: "a.txt") }
-    assert_equal "Uploading a.txt, which is not a file, needs byte_size:", error.message
+    assert_equal "Uploading #{File::NULL}, which is not a file, needs byte_size:", error.message
     assert_empty transport.requests
+  end
+
+  def test_needs_byte_size_for_an_open_device
+    File.open(File::NULL, "rb") do |device|
+      nohead, transport = client([created])
+      error = assert_raises(Nohead::UploadError) { nohead.assets.upload(device) }
+      assert_match(/needs byte_size/, error.message)
+      assert_empty transport.requests
+    end
+  end
+
+  # As a pipe's own rewind: its bytes can't be sent again.
+  def test_a_pipe_cannot_rewind
+    reader, writer = IO.pipe
+    assert_raises(Errno::ESPIPE) { Nohead::UploadSource.new(reader, byte_size: 5).rewind }
+  ensure
+    reader&.close
+    writer&.close
   end
 
   def test_uploads_bytes_in_a_stringio

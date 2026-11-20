@@ -10,14 +10,14 @@ module Nohead
 
     def initialize(file, filename: nil, content_type: nil, byte_size: nil)
       name, size = if file.is_a?(String) || file.is_a?(Pathname)
-                     open_path(Pathname(file), byte_size, present(filename))
+                     open_path(Pathname(file), byte_size)
                    else
                      open_io(file)
                    end
       # An empty filename or content type is the same as none.
       @filename = present(filename) || present(name) || "upload"
       @byte_size = byte_size || size or
-        raise UploadError, "Uploading a stream that cannot seek needs byte_size:"
+        raise UploadError, "Uploading a stream whose size isn't known needs byte_size:"
       if size && size < @byte_size
         close
         raise too_short(size)
@@ -65,8 +65,15 @@ module Nohead
     # can't seek back to where they start.
     def replayable? = !@start.nil? && @io.respond_to?(:pos=)
 
+    # The length a transport sends, as IO#size.
+    def size = byte_size
+
+    # Raises Errno::ESPIPE, as a pipe's rewind does, for bytes that can't be
+    # sent again.
     def rewind
-      @io.pos = @start if replayable?
+      raise Errno::ESPIPE, filename unless replayable?
+
+      @io.pos = @start
       @left = @byte_size
     end
 
@@ -84,15 +91,13 @@ module Nohead
       value unless value.to_s.empty?
     end
 
-    def open_path(path, byte_size, filename)
+    def open_path(path, byte_size)
       stat = path.stat # a missing path raises Errno::ENOENT, as opening it would
       raise Errno::EISDIR, path.to_s if stat.directory?
 
       # A pipe's or a device's size (/dev/stdin) is not what it holds.
       size = stat.size if stat.file?
-      unless size || byte_size
-        raise UploadError, "Uploading #{filename || path.basename}, which is not a file, needs byte_size:"
-      end
+      raise UploadError, "Uploading #{path}, which is not a file, needs byte_size:" unless size || byte_size
 
       @io = path.open("rb")
       @owned = true
