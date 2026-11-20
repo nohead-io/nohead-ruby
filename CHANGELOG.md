@@ -11,6 +11,8 @@ section is its GitHub release's notes.
   failed to resolve the bracketed address.
 - `assets.upload` sends at most `byte_size` bytes of a file, and raises
   `UploadError` when the file has fewer; it sent every byte the file had.
+  A path that isn't a file, such as a named pipe or `/dev/stdin`, needs
+  `byte_size`, as a stream does: its size on disk isn't what it holds.
 - An empty `idempotency_key` for `assets.upload` counts as not given, as it
   does for every other method.
 - `Webhooks.unwrap` says a `webhook-timestamp` that isn't digits is not a

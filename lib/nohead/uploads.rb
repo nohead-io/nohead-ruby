@@ -9,7 +9,11 @@ module Nohead
     attr_reader :filename, :content_type, :byte_size
 
     def initialize(file, filename: nil, content_type: nil, byte_size: nil)
-      name, size = file.is_a?(String) || file.is_a?(Pathname) ? open_path(Pathname(file)) : open_io(file)
+      name, size = if file.is_a?(String) || file.is_a?(Pathname)
+                     open_path(Pathname(file), byte_size)
+                   else
+                     open_io(file)
+                   end
       # An empty filename or content type is the same as none.
       @filename = present(filename) || present(name) || "upload"
       @byte_size = byte_size || size or
@@ -64,11 +68,14 @@ module Nohead
       value unless value.to_s.empty?
     end
 
-    def open_path(path)
+    def open_path(path, byte_size)
+      # A pipe's or a device's size (/dev/stdin) is not what it holds.
+      size = path.size if path.file?
+      raise UploadError, "Uploading #{path.basename}, which is not a file, needs byte_size:" unless size || byte_size
+
       @io = path.open("rb")
       @owned = true
-      # A pipe's or a device's size (/dev/stdin) is not what it holds.
-      [path.basename.to_s, path.file? ? path.size : nil]
+      [path.basename.to_s, size]
     end
 
     def open_io(io)

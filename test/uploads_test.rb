@@ -132,6 +132,14 @@ class UploadsTest < Minitest::Test
     end
   end
 
+  # A device's size on disk (0) isn't what it holds.
+  def test_needs_byte_size_for_a_path_that_is_not_a_file
+    nohead, transport = client([created])
+    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(File::NULL) }
+    assert_match(/byte_size/, error.message)
+    assert_empty transport.requests
+  end
+
   def test_uploads_bytes_in_a_stringio
     nohead, transport = client([created, stored, ready])
     nohead.assets.upload(StringIO.new("0123456789"), filename: "data.bin")
