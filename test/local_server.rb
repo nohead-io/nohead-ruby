@@ -2,7 +2,7 @@
 
 require "socket"
 
-# A real HTTP server on 127.0.0.1, on a free port, in a thread: for tests of
+# A real HTTP server on 127.0.0.1 (or `host`), on a free port, in a thread: for tests of
 # what Net::HTTP actually sends and how the transport reads what comes back,
 # which a fake transport can't show. Each request is read, kept in
 # `requests`, and handed to the handler with its connection, which writes the
@@ -15,8 +15,8 @@ class LocalServer
   # `chunked` is whether the body came with Transfer-Encoding: chunked.
   Request = Struct.new(:method, :path, :headers, :body, :chunked) # rubocop:disable Lint/StructNewOverride
 
-  def self.open(handler)
-    server = new(handler)
+  def self.open(handler, host: "127.0.0.1")
+    server = new(handler, host)
     yield server
   ensure
     server&.close
@@ -29,12 +29,13 @@ class LocalServer
                  "\r\n", body)
   end
 
-  def initialize(handler)
+  def initialize(handler, host)
     @handler = handler
+    @host = host
     @requests = []
     @connections = 0
     @lock = Mutex.new
-    @listener = TCPServer.new("127.0.0.1", 0)
+    @listener = TCPServer.new(host, 0)
     @threads = [Thread.new { serve }]
   end
 
@@ -44,7 +45,9 @@ class LocalServer
   # The connections opened so far, also ones whose request never arrived whole.
   def connections = @lock.synchronize { @connections }
 
-  def url(path) = "http://127.0.0.1:#{@listener.addr[1]}#{path}"
+  def port = @listener.addr[1]
+
+  def url(path) = "http://#{@host.include?(':') ? "[#{@host}]" : @host}:#{port}#{path}"
 
   # Stops it, handlers still stalling too.
   def close
