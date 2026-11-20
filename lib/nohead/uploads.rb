@@ -69,8 +69,9 @@ module Nohead
     end
 
     def open_path(path, byte_size)
+      stat = path.stat # a missing path raises Errno::ENOENT, as opening it would
       # A pipe's or a device's size (/dev/stdin) is not what it holds.
-      size = path.size if path.file?
+      size = stat.size if stat.file?
       raise UploadError, "Uploading #{path.basename}, which is not a file, needs byte_size:" unless size || byte_size
 
       @io = path.open("rb")

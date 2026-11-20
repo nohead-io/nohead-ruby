@@ -132,6 +132,18 @@ class UploadsTest < Minitest::Test
     end
   end
 
+  def test_a_missing_path_is_not_found
+    Dir.mktmpdir do |dir|
+      [nil, 5].each do |byte_size|
+        nohead, transport = client([created])
+        assert_raises(Errno::ENOENT, "byte_size: #{byte_size.inspect}") do
+          nohead.assets.upload(File.join(dir, "missing.png"), byte_size: byte_size)
+        end
+        assert_empty transport.requests
+      end
+    end
+  end
+
   # A device's size on disk (0) isn't what it holds.
   def test_needs_byte_size_for_a_path_that_is_not_a_file
     nohead, transport = client([created])
