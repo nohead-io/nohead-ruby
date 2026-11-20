@@ -10,7 +10,7 @@ module Nohead
 
     def initialize(file, filename: nil, content_type: nil, byte_size: nil)
       name, size = if file.is_a?(String) || file.is_a?(Pathname)
-                     open_path(Pathname(file), byte_size)
+                     open_path(Pathname(file), byte_size, present(filename))
                    else
                      open_io(file)
                    end
@@ -68,11 +68,15 @@ module Nohead
       value unless value.to_s.empty?
     end
 
-    def open_path(path, byte_size)
+    def open_path(path, byte_size, filename)
       stat = path.stat # a missing path raises Errno::ENOENT, as opening it would
+      raise Errno::EISDIR, path.to_s if stat.directory?
+
       # A pipe's or a device's size (/dev/stdin) is not what it holds.
       size = stat.size if stat.file?
-      raise UploadError, "Uploading #{path.basename}, which is not a file, needs byte_size:" unless size || byte_size
+      unless size || byte_size
+        raise UploadError, "Uploading #{filename || path.basename}, which is not a file, needs byte_size:"
+      end
 
       @io = path.open("rb")
       @owned = true

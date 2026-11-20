@@ -132,14 +132,18 @@ class UploadsTest < Minitest::Test
     end
   end
 
-  def test_a_missing_path_is_not_found
+  # A path that can't be read fails as opening it would (or, for a
+  # directory, reading it), whether or not byte_size is given.
+  def test_a_path_that_cannot_be_read
     Dir.mktmpdir do |dir|
-      [nil, 5].each do |byte_size|
-        nohead, transport = client([created])
-        assert_raises(Errno::ENOENT, "byte_size: #{byte_size.inspect}") do
-          nohead.assets.upload(File.join(dir, "missing.png"), byte_size: byte_size)
+      { "missing.png" => Errno::ENOENT, "." => Errno::EISDIR }.each do |name, error|
+        [nil, 5].each do |byte_size|
+          nohead, transport = client([created])
+          assert_raises(error, "#{name}, byte_size: #{byte_size.inspect}") do
+            nohead.assets.upload(File.join(dir, name), byte_size: byte_size)
+          end
+          assert_empty transport.requests
         end
-        assert_empty transport.requests
       end
     end
   end
@@ -168,8 +172,8 @@ class UploadsTest < Minitest::Test
   # A device's size on disk (0) isn't what it holds.
   def test_needs_byte_size_for_a_path_that_is_not_a_file
     nohead, transport = client([created])
-    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(File::NULL) }
-    assert_match(/byte_size/, error.message)
+    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(File::NULL, filename: "a.txt") }
+    assert_equal "Uploading a.txt, which is not a file, needs byte_size:", error.message
     assert_empty transport.requests
   end
 
