@@ -14,8 +14,8 @@ section is its GitHub release's notes.
   A path or an open file that isn't a regular file, such as a named pipe
   or `/dev/stdin`, needs `byte_size`, as a stream does: its size on disk
   isn't what it holds.
-- A directory raises `Errno::EISDIR` before an upload starts, rather than
-  `ConnectionError` once it had.
+- The path of a directory raises `Errno::EISDIR` before an upload starts,
+  rather than `ConnectionError` once it had.
 - A `transport:` of your own gets an upload's body as an object that reads
   as an IO does (`read`, `readpartial` and `size`) and stops at
   `byte_size`, rather than the file itself.

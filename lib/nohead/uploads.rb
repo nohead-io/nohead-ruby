@@ -17,7 +17,7 @@ module Nohead
       # An empty filename or content type is the same as none.
       @filename = present(filename) || present(name) || "upload"
       @byte_size = byte_size || size or
-        raise UploadError, "Uploading a stream whose size isn't known needs byte_size:"
+        raise UploadError, "Uploading a stream that isn't a file needs byte_size:"
       if size && size < @byte_size
         close
         raise too_short(size)
@@ -66,7 +66,7 @@ module Nohead
     def replayable? = !@start.nil? && @io.respond_to?(:pos=)
 
     # The length a transport sends, as IO#size.
-    def size = byte_size
+    alias size byte_size
 
     # Raises Errno::ESPIPE, as a pipe's rewind does, for bytes that can't be
     # sent again.
@@ -97,7 +97,7 @@ module Nohead
 
       # A pipe's or a device's size (/dev/stdin) is not what it holds.
       size = stat.size if stat.file?
-      raise UploadError, "Uploading #{path}, which is not a file, needs byte_size:" unless size || byte_size
+      raise UploadError, "Uploading #{path.basename}, which is not a file, needs byte_size:" unless size || byte_size
 
       @io = path.open("rb")
       @owned = true

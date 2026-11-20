@@ -228,7 +228,7 @@ class UploadsTest < Minitest::Test
   def test_needs_byte_size_for_a_path_that_is_not_a_file
     nohead, transport = client([created])
     error = assert_raises(Nohead::UploadError) { nohead.assets.upload(File::NULL, filename: "a.txt") }
-    assert_equal "Uploading #{File::NULL}, which is not a file, needs byte_size:", error.message
+    assert_equal "Uploading null, which is not a file, needs byte_size:", error.message
     assert_empty transport.requests
   end
 
@@ -236,7 +236,7 @@ class UploadsTest < Minitest::Test
     File.open(File::NULL, "rb") do |device|
       nohead, transport = client([created])
       error = assert_raises(Nohead::UploadError) { nohead.assets.upload(device) }
-      assert_match(/needs byte_size/, error.message)
+      assert_equal "Uploading a stream that isn't a file needs byte_size:", error.message
       assert_empty transport.requests
     end
   end
