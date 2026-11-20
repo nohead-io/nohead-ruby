@@ -13,6 +13,8 @@ section is its GitHub release's notes.
   `UploadError` when the file has fewer; it sent every byte the file had.
 - An empty `idempotency_key` for `assets.upload` counts as not given, as it
   does for every other method.
+- `Webhooks.unwrap` says a `webhook-timestamp` that isn't digits is not a
+  number, rather than too far from the current time, as the other SDKs do.
 
 ## 0.23.0
 

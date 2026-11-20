@@ -99,8 +99,9 @@ class StandardWebhooksTest < Minitest::Test
     "signature not UTF-8, then a valid one of another secret" =>
       [-> { signed.merge("webhook-signature" => "v1,#{INVALID} #{signed(secret: OTHER_SECRET)['webhook-signature']}") },
        /signature/],
-    "timestamp not UTF-8" => [-> { signed.merge("webhook-timestamp" => INVALID) }, /timestamp/],
-    "timestamp in other digits" => [-> { signed.merge("webhook-timestamp" => "١٦١٤٢٦٥٣٣٠") }, /timestamp/],
+    "timestamp not UTF-8" => [-> { signed.merge("webhook-timestamp" => INVALID) }, /timestamp is not a number/],
+    "timestamp in other digits" =>
+      [-> { signed.merge("webhook-timestamp" => "١٦١٤٢٦٥٣٣٠") }, /timestamp is not a number/],
     "webhook-id not UTF-8" => [-> { signed.merge("webhook-id" => "msg_#{INVALID}") }, /signature/],
     "non-ASCII webhook-id" => [-> { signed.merge("webhook-id" => "msg_é") }, /signature/],
     "non-ASCII binary webhook-id" => [-> { signed.merge("webhook-id" => "msg_é".b) }, /signature/]
