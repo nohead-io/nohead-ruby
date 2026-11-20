@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Smoke test (Nohead spec §48.14): the core flow against a live API, with the
+# Smoke test: the core flow against a live API, with the
 # installed gem. Needs NOHEAD_API_URL (the API to test, read as base_url:)
 # and NOHEAD_API_KEY (a key with schema, records, assets and webhooks
 # read/write scopes). Exits non-zero on failure, after deleting what it
