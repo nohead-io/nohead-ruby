@@ -144,6 +144,27 @@ class UploadsTest < Minitest::Test
     end
   end
 
+  # A transport of one's own reads the upload as an IO, here as Net::HTTP
+  # does (IO.copy_stream, in chunks into a buffer): byte_size bytes.
+  class CopyingTransport < FakeTransport
+    def call(method, url, headers, body, timeout)
+      if body.respond_to?(:read)
+        copy = StringIO.new
+        IO.copy_stream(body, copy)
+        body = copy.string
+      end
+      super
+    end
+  end
+
+  def test_a_transport_of_its_own_reads_the_upload_as_an_io
+    transport = CopyingTransport.new([created, stored, ready])
+    nohead = Nohead::Client.new(api_key: "nohead_sk_test", base_url: "https://api.test", project_id: "prj_1",
+                                transport: transport)
+    nohead.assets.upload(StringIO.new("hello world"), byte_size: 5)
+    assert_equal "hello", transport.requests[1].body
+  end
+
   # A device's size on disk (0) isn't what it holds.
   def test_needs_byte_size_for_a_path_that_is_not_a_file
     nohead, transport = client([created])

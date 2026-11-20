@@ -12,7 +12,9 @@ module Nohead
   # Sends requests with Net::HTTP. A client's `transport:` can be anything
   # with the same `call`, e.g. for tests.
   class Transport
-    # `body` is a String, an IO (streamed, with Content-Length), or nil.
+    # `body` is a String, nil, or, for an upload, a stream to send with its
+    # Content-Length: it reads as an IO does, `read(length = nil, buffer =
+    # nil)`, up to that length.
     def call(method, url, headers, body, timeout)
       uri = URI(url)
       request = Net::HTTPGenericRequest.new(method, !body.nil?, true, uri.request_uri, headers)
