@@ -52,7 +52,7 @@ class NetworkTest < Minitest::Test
   end
 
   def test_streams_an_upload_from_a_pipe_with_its_content_length
-    reader = pipe("hello")
+    reader = pipe("hello world") # only byte_size bytes go
     serve(uploads(->(_, socket) { LocalServer.reply(socket, 200) })) do |nohead, server|
       assert_equal "ready", nohead.assets.upload(reader, filename: "a.txt", byte_size: 5).status
       post = server.requests.first
@@ -63,6 +63,17 @@ class NetworkTest < Minitest::Test
       assert_equal "hello", put.body
       assert_equal "text/plain", put.headers["content-type"]
       refute put.headers.key?("authorization")
+    end
+  ensure
+    reader&.close
+  end
+
+  def test_refuses_a_pipe_shorter_than_its_byte_size
+    reader = pipe("hel")
+    serve(uploads(->(_, socket) { LocalServer.reply(socket, 200) })) do |nohead, server|
+      error = assert_raises(Nohead::UploadError) { nohead.assets.upload(reader, filename: "a.txt", byte_size: 5) }
+      assert_equal "Could not upload a.txt: it has 3 bytes, fewer than its byte_size (5)", error.message
+      assert_equal %w[POST], server.requests.map(&:method)
     end
   ensure
     reader&.close

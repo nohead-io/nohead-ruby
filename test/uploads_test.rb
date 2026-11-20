@@ -84,19 +84,20 @@ class UploadsTest < Minitest::Test
     end
   end
 
-  # Files of "hello world", by kind: each its own test.
+  # Files of "hello world", by kind, with the requests made before a short
+  # one fails: none when its size is known. Each its own test.
   SOURCES = {
-    "stringio" => ->(_dir) { StringIO.new("hello world") },
-    "path" => ->(dir) { File.join(dir, "a.txt").tap { |path| File.binwrite(path, "hello world") } },
-    "pipe" => lambda do |_dir|
+    "stringio" => [->(_dir) { StringIO.new("hello world") }, []],
+    "path" => [->(dir) { File.join(dir, "a.txt").tap { |path| File.binwrite(path, "hello world") } }, []],
+    "pipe" => [lambda do |_dir|
       reader, writer = IO.pipe
       writer.write("hello world")
       writer.close
       reader
-    end
+    end, %w[POST]]
   }.freeze
 
-  SOURCES.each do |kind, source|
+  SOURCES.each do |kind, (source, requests)|
     define_method("test_sends_byte_size_bytes_at_most_of_a_#{kind}") do
       Dir.mktmpdir do |dir|
         nohead, transport = client([created, stored, ready])
@@ -108,11 +109,12 @@ class UploadsTest < Minitest::Test
 
     define_method("test_refuses_a_#{kind}_shorter_than_its_byte_size") do
       Dir.mktmpdir do |dir|
-        nohead, = client([created, stored, ready])
+        nohead, transport = client([created, stored, ready])
         error = assert_raises(Nohead::UploadError) do
           nohead.assets.upload(source.call(dir), filename: "a.txt", byte_size: 20)
         end
         assert_match(/\ACould not upload a.txt: it has 11 bytes, fewer/, error.message)
+        assert_equal requests, transport.requests.map(&:method)
       end
     end
   end

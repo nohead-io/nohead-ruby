@@ -14,6 +14,10 @@ module Nohead
       @filename = present(filename) || present(name) || "upload"
       @byte_size = byte_size || size or
         raise UploadError, "Uploading a stream that cannot seek needs byte_size:"
+      if size && size < @byte_size
+        close
+        raise too_short(size)
+      end
       # Without one, the API types the file by its filename, as for every client.
       @content_type = present(content_type)
       @start = position(@io)
@@ -24,14 +28,15 @@ module Nohead
     # byte_size, the length the upload declared. Raises UploadError when the
     # file ends sooner.
     def read(length = nil, buffer = nil)
-      return (length ? nil : +"") if @left.zero?
+      if @left.zero?
+        buffer&.clear
+        return length ? nil : buffer || +""
+      end
 
       chunk = @io.read(length ? [length, @left].min : @left, buffer)
       size = chunk.to_s.bytesize
-      if chunk.nil? || (length.nil? && size < @left)
-        raise UploadError, "Could not upload #{filename}: it has #{byte_size - @left + size} bytes, " \
-                           "fewer than its byte_size (#{byte_size})"
-      end
+      raise too_short(byte_size - @left + size) if chunk.nil? || (length.nil? && size < @left)
+
       @left -= size
       chunk
     end
@@ -50,6 +55,10 @@ module Nohead
     end
 
     private
+
+    def too_short(size)
+      UploadError.new("Could not upload #{filename}: it has #{size} bytes, fewer than its byte_size (#{byte_size})")
+    end
 
     def present(value)
       value unless value.to_s.empty?
