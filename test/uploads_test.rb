@@ -77,9 +77,11 @@ class UploadsTest < Minitest::Test
   end
 
   def test_checks_for_a_finished_upload_only_with_an_idempotency_key
-    nohead, transport = client([created, stored, ready])
-    nohead.assets.upload(StringIO.new("x"))
-    assert_equal %w[POST PUT POST], transport.requests.map(&:method)
+    [nil, ""].each do |key|
+      nohead, transport = client([created, stored, ready])
+      nohead.assets.upload(StringIO.new("x"), idempotency_key: key)
+      assert_equal %w[POST PUT POST], transport.requests.map(&:method), "idempotency_key: #{key.inspect}"
+    end
   end
 
   # Files of "hello world", by kind: each its own test.

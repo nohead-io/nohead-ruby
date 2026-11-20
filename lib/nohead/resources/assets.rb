@@ -25,7 +25,7 @@ module Nohead
                                   **{ content_type: source.content_type, alt: alt }.compact,
                                   idempotency_key: idempotency_key)
           # A replayed start returns the first run's asset, which may be done.
-          if idempotency_key
+          unless idempotency_key.to_s.empty?
             current = get(created.id)
             return current if current.status == "ready"
             # The key replays the first run's upload URL, which expires sooner.
