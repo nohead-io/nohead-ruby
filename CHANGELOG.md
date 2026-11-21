@@ -9,6 +9,20 @@ section is its GitHub release's notes.
 
 - A `base_url` with an IPv6 address (`http://[::1]:3000`) connects; it
   failed to resolve the bracketed address.
+- `assets.upload` sends at most `byte_size` bytes of a file, and raises
+  `UploadError` when the file has fewer; it sent every byte the file had.
+  A path or an open file that isn't a regular file, such as a named pipe
+  or `/dev/stdin`, needs `byte_size`, as a stream does: its size on disk
+  isn't what it holds.
+- The path of a directory raises `Errno::EISDIR` before an upload starts,
+  rather than `ConnectionError` once it had.
+- A `transport:` of your own gets an upload's body as an object that reads
+  as an IO does (`read`, `readpartial` and `size`) and stops at
+  `byte_size`, rather than the file itself.
+- An empty `idempotency_key` for `assets.upload` counts as not given, as it
+  does for every other method.
+- `Webhooks.unwrap` says a `webhook-timestamp` that isn't digits is not a
+  number, rather than too far from the current time, as the other SDKs do.
 
 ## 0.23.0
 

@@ -27,7 +27,8 @@ module Nohead
       unless id && timestamp && signatures
         raise WebhookVerificationError, "Missing webhook-id, webhook-timestamp or webhook-signature header"
       end
-      unless timestamp.match?(/\A\d+\z/) && (Time.now.to_i - timestamp.to_i).abs <= tolerance
+      raise WebhookVerificationError, "The webhook timestamp is not a number" unless timestamp.match?(/\A\d+\z/)
+      if (Time.now.to_i - timestamp.to_i).abs > tolerance
         raise WebhookVerificationError, "The webhook timestamp is too far from the current time"
       end
 

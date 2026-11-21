@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "timeout"
 require "tmpdir"
 
 class UploadsTest < Minitest::Test
@@ -77,9 +78,176 @@ class UploadsTest < Minitest::Test
   end
 
   def test_checks_for_a_finished_upload_only_with_an_idempotency_key
-    nohead, transport = client([created, stored, ready])
-    nohead.assets.upload(StringIO.new("x"))
-    assert_equal %w[POST PUT POST], transport.requests.map(&:method)
+    [nil, ""].each do |key|
+      nohead, transport = client([created, stored, ready])
+      nohead.assets.upload(StringIO.new("x"), idempotency_key: key)
+      assert_equal %w[POST PUT POST], transport.requests.map(&:method), "idempotency_key: #{key.inspect}"
+    end
+  end
+
+  # Files of "hello world", by kind, with the requests made before a short
+  # one fails: none when its size is known. Each its own test.
+  SOURCES = {
+    "stringio" => [->(_dir) { StringIO.new("hello world") }, []],
+    "path" => [->(dir) { File.join(dir, "a.txt").tap { |path| File.binwrite(path, "hello world") } }, []],
+    "pipe" => [lambda do |_dir|
+      reader, writer = IO.pipe
+      writer.write("hello world")
+      writer.close
+      reader
+    end, %w[POST]]
+  }.freeze
+
+  SOURCES.each do |kind, (source, requests)|
+    define_method("test_sends_byte_size_bytes_at_most_of_a_#{kind}") do
+      Dir.mktmpdir do |dir|
+        nohead, transport = client([created, stored, ready])
+        nohead.assets.upload(source.call(dir), filename: "a.txt", byte_size: 5)
+        assert_equal 5, transport.requests[0].json["byte_size"]
+        assert_equal "hello", transport.requests[1].body
+      end
+    end
+
+    define_method("test_refuses_a_#{kind}_shorter_than_its_byte_size") do
+      Dir.mktmpdir do |dir|
+        nohead, transport = client([created, stored, ready])
+        error = assert_raises(Nohead::UploadError) do
+          nohead.assets.upload(source.call(dir), filename: "a.txt", byte_size: 20)
+        end
+        assert_match(/\ACould not upload a.txt: it has 11 bytes, fewer/, error.message)
+        assert_equal requests, transport.requests.map(&:method)
+      end
+    end
+  end
+
+  # Its size on disk is 0, whatever it holds.
+  def test_uploads_a_named_pipe_with_its_byte_size
+    Dir.mktmpdir do |dir|
+      fifo = File.join(dir, "fifo")
+      File.mkfifo(fifo)
+      writer = Thread.new { File.binwrite(fifo, "hello") }
+      begin
+        nohead, transport = client([created, stored, ready])
+        nohead.assets.upload(fifo, byte_size: 5)
+        assert writer.join(5), "the writer finished"
+        assert_equal "hello", transport.requests[1].body
+      ensure
+        writer.kill # blocked opening the pipe if the upload never did
+      end
+    end
+  end
+
+  # A device's size (0) isn't what it holds: its byte_size is.
+  def test_uploads_a_device_with_its_byte_size
+    File.open("/dev/zero", "rb") do |zero|
+      nohead, transport = client([created, stored, ready])
+      nohead.assets.upload(zero, byte_size: 5)
+      assert_equal "\0" * 5, transport.requests[1].body
+    end
+  end
+
+  # A path that can't be read fails as opening it would (or, for a
+  # directory, reading it), whether or not byte_size is given.
+  def test_a_path_that_cannot_be_read
+    Dir.mktmpdir do |dir|
+      { "missing.png" => Errno::ENOENT, "." => Errno::EISDIR }.each do |name, error|
+        [nil, 5].each do |byte_size|
+          nohead, transport = client([created])
+          assert_raises(error, "#{name}, byte_size: #{byte_size.inspect}") do
+            nohead.assets.upload(File.join(dir, name), byte_size: byte_size)
+          end
+          assert_empty transport.requests
+        end
+      end
+    end
+  end
+
+  # A transport of one's own reads the upload as an IO, here as Net::HTTP
+  # does (IO.copy_stream, in chunks into a buffer): byte_size bytes.
+  class CopyingTransport < FakeTransport
+    attr_reader :size
+
+    def call(method, url, headers, body, timeout)
+      if body.respond_to?(:read)
+        @size = body.size
+        copy = StringIO.new
+        IO.copy_stream(body, copy)
+        body = copy.string
+      end
+      super
+    end
+  end
+
+  # Reads the upload as http.rb does: what it has so far, then (once `more`
+  # has run) the rest.
+  class PartialTransport < FakeTransport
+    attr_reader :partial
+
+    def initialize(replies, more)
+      super(replies)
+      @more = more
+    end
+
+    def call(method, url, headers, body, timeout)
+      if body.respond_to?(:read)
+        @partial = body.readpartial(1024)
+        @more.call
+        body = @partial + body.read
+      end
+      super
+    end
+  end
+
+  def test_a_transport_reads_what_a_pipe_has_so_far
+    reader, writer = IO.pipe
+    writer.write("hello")
+    transport = PartialTransport.new([created, stored, ready], lambda {
+      writer.write(" world!")
+      writer.close
+    })
+    nohead = Nohead::Client.new(api_key: "nohead_sk_test", base_url: "https://api.test", project_id: "prj_1",
+                                transport: transport)
+    Timeout.timeout(5) { nohead.assets.upload(reader, byte_size: 11) }
+    assert_equal "hello", transport.partial
+    assert_equal "hello world", transport.requests[1].body
+  ensure
+    reader&.close
+    writer&.close
+  end
+
+  def test_a_transport_of_its_own_reads_the_upload_as_an_io
+    transport = CopyingTransport.new([created, stored, ready])
+    nohead = Nohead::Client.new(api_key: "nohead_sk_test", base_url: "https://api.test", project_id: "prj_1",
+                                transport: transport)
+    nohead.assets.upload(StringIO.new("hello world"), byte_size: 5)
+    assert_equal 5, transport.size
+    assert_equal "hello", transport.requests[1].body
+  end
+
+  # A device's size on disk (0) isn't what it holds.
+  def test_needs_byte_size_for_a_path_that_is_not_a_file
+    nohead, transport = client([created])
+    error = assert_raises(Nohead::UploadError) { nohead.assets.upload(File::NULL, filename: "a.txt") }
+    assert_equal "Uploading null, which is not a file, needs byte_size:", error.message
+    assert_empty transport.requests
+  end
+
+  def test_needs_byte_size_for_an_open_device
+    File.open(File::NULL, "rb") do |device|
+      nohead, transport = client([created])
+      error = assert_raises(Nohead::UploadError) { nohead.assets.upload(device) }
+      assert_equal "Uploading a stream that isn't a file needs byte_size:", error.message
+      assert_empty transport.requests
+    end
+  end
+
+  # As a pipe's own rewind: its bytes can't be sent again.
+  def test_a_pipe_cannot_rewind
+    reader, writer = IO.pipe
+    assert_raises(Errno::ESPIPE) { Nohead::UploadSource.new(reader, byte_size: 5).rewind }
+  ensure
+    reader&.close
+    writer&.close
   end
 
   def test_uploads_bytes_in_a_stringio

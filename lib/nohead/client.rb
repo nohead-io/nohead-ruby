@@ -151,7 +151,7 @@ module Nohead
         begin
           response = @transport.call(method, url,
                                      headers.merge("Content-Length" => source.byte_size.to_s),
-                                     source.io, @timeout)
+                                     source, @timeout)
           return response unless RETRYABLE_STATUSES.include?(response.status) && attempt < retries
 
           failed = { status: response.status }
