@@ -5,7 +5,7 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
-## Unreleased
+## 0.24.0
 
 - A `base_url` with an IPv6 address (`http://[::1]:3000`) connects; it
   failed to resolve the bracketed address.
