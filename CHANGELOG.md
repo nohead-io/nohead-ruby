@@ -5,6 +5,17 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
+## 0.25.0
+
+- A field's search options are its configuration's `search` hash, as the
+  API now has them: `searchable`, `filterable`, `sortable` and `returned`,
+  where a relation's `searchable` and an asset's or relation's `returned`
+  take a list (related field IDs, or an asset's parts) in place of `true`.
+  The gem passes configurations through as they are, so code that sets
+  the old `searchable`, `filterable`, `sortable`, `included`, `expanded`
+  or `searched` options needs the new shape. Search-only related fields
+  filter and facet under `expanded.<key>.unreturned.<field>`.
+
 ## 0.24.0
 
 - A `base_url` with an IPv6 address (`http://[::1]:3000`) connects; it
