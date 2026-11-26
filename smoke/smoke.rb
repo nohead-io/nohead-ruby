@@ -129,7 +129,11 @@ begin
     expect(author&.data&.name == "Ada Lovelace" && author.expanded&.photo&.id == asset.id,
            "a dotted expand embeds the related record, and its asset under it")
   ensure
-    made.reverse_each { |id| nohead.collections.delete(id) }
+    made.reverse_each do |id|
+      nohead.collections.delete(id)
+    rescue Nohead::Error
+      nil
+    end
   end
 
   expect(nohead.assets.delete(asset.id).deleted_at, "assets soft-delete")
