@@ -5,6 +5,12 @@ Changes to the `nohead` gem that you can notice. Versions follow
 releases; a change that could break your code is a major one. Each release's
 section is its GitHub release's notes.
 
+## Unreleased
+
+- `expand` takes a dotted key, which reaches one relation further:
+  `author.photo` embeds the author, and the author's photo under the
+  author's own `expanded`. It counts the author toward the five fields.
+
 ## 0.25.0
 
 - A field's search options are its configuration's `search` hash, as the

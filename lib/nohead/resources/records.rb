@@ -47,7 +47,10 @@ module Nohead
 
       # A collection's records, newest first by default. `filter` holds
       # filters ({ published_at: { exists: true } } for published records),
-      # `expand` relation or asset fields to embed under `expanded` (at most 5).
+      # `expand` relation, asset or rich text fields to embed under `expanded`
+      # (at most 5). A dotted key reaches one relation further, and counts the
+      # relation too: "author.photo" embeds the author, and the author's photo
+      # under the author's own `expanded`.
       # Methods that return records or drafts take `rich_text:` ("document",
       # "html" or "markdown"): how their rich text fields read.
       def list(collection, filter: nil, sort: nil, expand: nil, limit: nil, cursor: nil, rich_text: nil)

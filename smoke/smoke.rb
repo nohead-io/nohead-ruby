@@ -104,6 +104,38 @@ begin
   expect(asset.status == "ready" && asset.byte_size == 5, "assets upload to storage")
   expect(asset.alt == "A greeting", "upload sets alt text")
   expect(nohead.assets.update(asset.id, filename: "greeting.txt").filename == "greeting.txt", "assets rename")
+  # A dotted expand: a note's author, and the author's photo under the
+  # author's own `expanded`. Notes are deleted first: their relation points
+  # at People.
+  made = []
+  begin
+    suffix = SecureRandom.hex(4)
+    people = nohead.collections.create(
+      name: "Ruby smoke people", slug: "sdk-ruby-people-#{suffix}",
+      fields: [{ name: "Name", key: "name", type: "text", required: true },
+               { name: "Photo", key: "photo", type: "asset" }]
+    )
+    made << people.id
+    notes = nohead.collections.create(
+      name: "Ruby smoke notes", slug: "sdk-ruby-notes-#{suffix}",
+      fields: [{ name: "Title", key: "title", type: "text", required: true },
+               { name: "Author", key: "author", type: "relation",
+                 configuration: { target_collection_id: people.id } }]
+    )
+    made << notes.id
+    ada = nohead.records.create(people.slug, data: { name: "Ada Lovelace", photo: asset.id })
+    note = nohead.records.create(notes.slug, data: { title: "Notes on the engine", author: ada.id })
+    author = nohead.records.get(note.id, expand: ["author.photo"]).expanded.author
+    expect(author&.data&.name == "Ada Lovelace" && author.expanded&.photo&.id == asset.id,
+           "a dotted expand embeds the related record, and its asset under it")
+  ensure
+    made.reverse_each do |id|
+      nohead.collections.delete(id)
+    rescue Nohead::Error
+      nil
+    end
+  end
+
   expect(nohead.assets.delete(asset.id).deleted_at, "assets soft-delete")
   nohead.assets.purge(asset.id)
   left.delete(:assets)
