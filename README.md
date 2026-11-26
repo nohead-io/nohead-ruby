@@ -92,6 +92,17 @@ nohead.records.delete(post.id) # soft delete; records.restore undoes it
 
 Methods return the API's resources (see [Results](#results)) and raise on failure. Field values are under `data`, keyed by field API key.
 
+**Expanding relations and assets.** `expand:` embeds what relation, asset and rich text fields point at under `expanded`, by field key, at most five fields. A dotted key reaches one relation further, and counts the relation too: `agent.photo` embeds the agent, and the agent's photo under the agent's own `expanded`.
+
+```ruby
+listing = nohead.records.get("rec_01J9...", expand: ["agent.photo", "photos"])
+agent = listing.expanded.agent # a record, or nil
+photo = agent&.expanded&.photo # an asset, or nil
+photos = listing.expanded.photos # a list of assets
+```
+
+A single relation or asset is `nil` when what it points at is gone, or, for a published-only key, unpublished; a list leaves those out. A rich text field expands to the assets its images show.
+
 **Upserts.** With `upsert_on:`, the key of a `unique` field, `create` updates the record holding that value instead, if one exists, so a content sync can run again without duplicates: `nohead.records.create("products", data: { sku: "TEE-01", title: "Tee" }, upsert_on: "sku")`.
 
 **Creating it published.** `publish: true` creates the record published, in one request and one transaction, so it is never unpublished in between (the key's `records:write` scope covers it, as it covers publishing). With `upsert_on:`, a record already published stays published: `nohead.records.create("posts", data: { title: "Hello" }, publish: true)`.
