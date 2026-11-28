@@ -10,5 +10,5 @@ group :development do
   gem "minitest", "~> 6.1"
   gem "rake", "~> 13.4"
   gem "rubocop", "~> 1.92"
-  gem "standardwebhooks", "~> 1.1" # the webhook conformance test
+  gem "standardwebhooks", "~> 1.3" # the webhook conformance test
 end
